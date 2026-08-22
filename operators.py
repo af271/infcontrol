@@ -327,6 +327,11 @@ class TreeDepth(UnOp):
         return isinstance(inp, Formula) and output == inp.depth
 
 
+class Histogram(dict[str, int]):
+    def desc_len(self, mode: str = "use_gaussian") -> float:
+        return desc_len(tuple(self.items()), mode=mode)
+
+
 class NumVariables(UnOp):
     _raw_specs = [
         (tuple[Formula], int),
@@ -416,7 +421,11 @@ class OperatorHistogram(UnOp):
         batch = _apply_unary_batch(formula, lambda f: dict(f.operator_histogram), object)
         if batch is not None:
             return batch
-        return dict(formula.operator_histogram)
+        return Histogram(formula.operator_histogram)
+
+    @staticmethod
+    def _properties(*args):
+        return {"spec": Histogram}
 
     @staticmethod
     def _suitable(output: Any) -> bool:
@@ -441,7 +450,11 @@ class SymbolHistogram(UnOp):
         batch = _apply_unary_batch(formula, lambda f: dict(f.symbol_histogram), object)
         if batch is not None:
             return batch
-        return dict(formula.symbol_histogram)
+        return Histogram(formula.symbol_histogram)
+
+    @staticmethod
+    def _properties(*args):
+        return {"spec": Histogram}
 
     @staticmethod
     def _suitable(output: Any) -> bool:

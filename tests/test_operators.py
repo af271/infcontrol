@@ -121,14 +121,10 @@ def test_wunderbaum_enum_only_with_hyperon_operators() -> None:
         Value(Formula(["->", "alpha", "beta"]), spec=Formula, permeable=False, name="target2"),
     ]
 
-    items = list(
-        islice(enum.iterate(prop_class, targets, max_popped=100, enum_only=True), 5)
-    )
+    items = list(enum.iterate(prop_class, targets, max_popped=100, enum_only=True))
     assert items, "enum_only should produce at least one DAG"
 
     for graph, _dl, mem, _bn in items:
-        graph.render()
-        breakpoint()
         leaves = list(graph.leaves())
         assert leaves, "Generated DAG should have leaves"
 
