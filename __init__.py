@@ -1,10 +1,19 @@
 """Hyperon symbolic tooling."""
 
-from infcontrol.canonicalize import canonicalize, is_variable, num_variables, tree_depth, tree_size, variables
+from infcontrol.canonicalize import (
+    canonicalize,
+    is_variable,
+    num_variables,
+    tree_depth,
+    tree_size,
+    variables,
+)
 from infcontrol.dataset import DATASET_FILE, Dataset, DatasetRecord
 from infcontrol.logit_fitter import LogitFitter
+from infcontrol.inference_control import InferenceControl
 from infcontrol.operators import (
     Formula,
+    FormulaArray,
     FormulaEqual,
     ImplicationChainLength,
     NumOperators,
@@ -24,6 +33,7 @@ __all__ = [
     "Dataset",
     "DatasetRecord",
     "LogitFitter",
+    "InferenceControl",
     "canonicalize",
     "is_variable",
     "tree_size",
@@ -31,6 +41,7 @@ __all__ = [
     "variables",
     "num_variables",
     "Formula",
+    "FormulaArray",
     "TreeSize",
     "TreeDepth",
     "NumVariables",

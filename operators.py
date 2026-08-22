@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Self
 
 import numpy as np
 
@@ -82,7 +82,9 @@ class Formula:
         object.__setattr__(self, "operator_histogram", dict(stats.operator_histogram))
         object.__setattr__(self, "symbol_histogram", dict(stats.symbol_histogram))
         object.__setattr__(self, "root_operator", stats.root_operator)
-        object.__setattr__(self, "implication_chain_length", stats.implication_chain_length)
+        object.__setattr__(
+            self, "implication_chain_length", stats.implication_chain_length
+        )
 
     def desc_len(self, mode: str = "use_gaussian") -> float:
         return desc_len(self.canonical_tree, mode=mode)
@@ -94,6 +96,28 @@ class Formula:
             return str(node)
 
         return format_node(self.canonical_tree)
+
+
+class FormulaArray(np.ndarray):
+    """One-dimensional Formula array with William-compatible rendering."""
+
+    def __new__(cls, values: Any) -> Self:
+        array = np.asarray(values, dtype=object).view(cls)
+        if array.ndim != 1 or not all(isinstance(value, Formula) for value in array):
+            raise ValueError("FormulaArray must contain one-dimensional Formula values")
+        return array
+
+    def __array_finalize__(self, obj: Any) -> None:
+        pass
+
+    def __str__(self) -> str:
+        return "[" + ", ".join(str(value) for value in self) + "]"
+
+    def __repr__(self) -> str:
+        return str(self)
+
+    def desc_len(self, mode: str = "use_gaussian") -> float:
+        return float(sum(value.desc_len(mode=mode) for value in self))
 
 
 @dataclass(slots=True)
@@ -249,7 +273,9 @@ def _apply_unary_batch(value: Any, fn, dtype: np.dtype | type) -> np.ndarray | N
     return out
 
 
-def _apply_binary_batch(left: Any, right: Any, fn, dtype: np.dtype | type) -> np.ndarray | None:
+def _apply_binary_batch(
+    left: Any, right: Any, fn, dtype: np.dtype | type
+) -> np.ndarray | None:
     left_arr = _as_formula_batch(left)
     right_arr = _as_formula_batch(right)
     if left_arr is None and right_arr is None:
@@ -285,7 +311,9 @@ class TreeSize(UnOp):
         (tuple[Array[Formula]], Array[int]),
     ]
 
-    def _call(self, formula: Formula | list[Formula] | tuple[Formula] | np.ndarray) -> int | np.ndarray:
+    def _call(
+        self, formula: Formula | list[Formula] | tuple[Formula] | np.ndarray
+    ) -> int | np.ndarray:
         batch = _apply_unary_batch(formula, lambda f: f.size, np.int64)
         if batch is not None:
             return batch
@@ -310,7 +338,9 @@ class TreeDepth(UnOp):
         (tuple[Array[Formula]], Array[int]),
     ]
 
-    def _call(self, formula: Formula | list[Formula] | tuple[Formula] | np.ndarray) -> int | np.ndarray:
+    def _call(
+        self, formula: Formula | list[Formula] | tuple[Formula] | np.ndarray
+    ) -> int | np.ndarray:
         batch = _apply_unary_batch(formula, lambda f: f.depth, np.int64)
         if batch is not None:
             return batch
@@ -340,7 +370,9 @@ class NumVariables(UnOp):
         (tuple[Array[Formula]], Array[int]),
     ]
 
-    def _call(self, formula: Formula | list[Formula] | tuple[Formula] | np.ndarray) -> int | np.ndarray:
+    def _call(
+        self, formula: Formula | list[Formula] | tuple[Formula] | np.ndarray
+    ) -> int | np.ndarray:
         batch = _apply_unary_batch(formula, lambda f: len(f.variables), np.int64)
         if batch is not None:
             return batch
@@ -365,8 +397,12 @@ class NumOperators(UnOp):
         (tuple[Array[Formula]], Array[int]),
     ]
 
-    def _call(self, formula: Formula | list[Formula] | tuple[Formula] | np.ndarray) -> int | np.ndarray:
-        batch = _apply_unary_batch(formula, lambda f: sum(f.operator_histogram.values()), np.int64)
+    def _call(
+        self, formula: Formula | list[Formula] | tuple[Formula] | np.ndarray
+    ) -> int | np.ndarray:
+        batch = _apply_unary_batch(
+            formula, lambda f: sum(f.operator_histogram.values()), np.int64
+        )
         if batch is not None:
             return batch
         return sum(formula.operator_histogram.values())
@@ -379,7 +415,9 @@ class NumOperators(UnOp):
 
     @staticmethod
     def check(inp: Formula, output: Any) -> bool:
-        return isinstance(inp, Formula) and output == sum(inp.operator_histogram.values())
+        return isinstance(inp, Formula) and output == sum(
+            inp.operator_histogram.values()
+        )
 
 
 class RootOperator(UnOp):
@@ -390,7 +428,9 @@ class RootOperator(UnOp):
         (tuple[Array[Formula]], Array[str]),
     ]
 
-    def _call(self, formula: Formula | list[Formula] | tuple[Formula] | np.ndarray) -> str | np.ndarray:
+    def _call(
+        self, formula: Formula | list[Formula] | tuple[Formula] | np.ndarray
+    ) -> str | np.ndarray:
         batch = _apply_unary_batch(formula, lambda f: f.root_operator, object)
         if batch is not None:
             if any(item is None for item in batch.flat):
@@ -417,8 +457,12 @@ class OperatorHistogram(UnOp):
         (tuple[Array[Formula]], Array[dict[str, int]]),
     ]
 
-    def _call(self, formula: Formula | list[Formula] | tuple[Formula] | np.ndarray) -> dict[str, int] | np.ndarray:
-        batch = _apply_unary_batch(formula, lambda f: dict(f.operator_histogram), object)
+    def _call(
+        self, formula: Formula | list[Formula] | tuple[Formula] | np.ndarray
+    ) -> dict[str, int] | np.ndarray:
+        batch = _apply_unary_batch(
+            formula, lambda f: dict(f.operator_histogram), object
+        )
         if batch is not None:
             return batch
         return Histogram(formula.operator_histogram)
@@ -430,7 +474,8 @@ class OperatorHistogram(UnOp):
     @staticmethod
     def _suitable(output: Any) -> bool:
         return isinstance(output, dict) and all(
-            isinstance(k, str) and isinstance(v, int) and v >= 0 for k, v in output.items()
+            isinstance(k, str) and isinstance(v, int) and v >= 0
+            for k, v in output.items()
         )
 
     @staticmethod
@@ -446,7 +491,9 @@ class SymbolHistogram(UnOp):
         (tuple[Array[Formula]], Array[dict[str, int]]),
     ]
 
-    def _call(self, formula: Formula | list[Formula] | tuple[Formula] | np.ndarray) -> dict[str, int] | np.ndarray:
+    def _call(
+        self, formula: Formula | list[Formula] | tuple[Formula] | np.ndarray
+    ) -> dict[str, int] | np.ndarray:
         batch = _apply_unary_batch(formula, lambda f: dict(f.symbol_histogram), object)
         if batch is not None:
             return batch
@@ -459,7 +506,8 @@ class SymbolHistogram(UnOp):
     @staticmethod
     def _suitable(output: Any) -> bool:
         return isinstance(output, dict) and all(
-            isinstance(k, str) and isinstance(v, int) and v >= 0 for k, v in output.items()
+            isinstance(k, str) and isinstance(v, int) and v >= 0
+            for k, v in output.items()
         )
 
     @staticmethod
@@ -475,8 +523,12 @@ class ImplicationChainLength(UnOp):
         (tuple[Array[Formula]], Array[int]),
     ]
 
-    def _call(self, formula: Formula | list[Formula] | tuple[Formula] | np.ndarray) -> int | np.ndarray:
-        batch = _apply_unary_batch(formula, lambda f: f.implication_chain_length, np.int64)
+    def _call(
+        self, formula: Formula | list[Formula] | tuple[Formula] | np.ndarray
+    ) -> int | np.ndarray:
+        batch = _apply_unary_batch(
+            formula, lambda f: f.implication_chain_length, np.int64
+        )
         if batch is not None:
             return batch
         return formula.implication_chain_length
@@ -511,7 +563,9 @@ class FormulaEqual(BinOp):
         batch = _apply_binary_batch(
             left,
             right,
-            lambda left_formula, right_formula: left_formula.canonical_tree == right_formula.canonical_tree,
+            lambda left_formula, right_formula: (
+                left_formula.canonical_tree == right_formula.canonical_tree
+            ),
             np.bool_,
         )
         if batch is not None:
@@ -548,7 +602,9 @@ class SharedVariables(BinOp):
         batch = _apply_binary_batch(
             left,
             right,
-            lambda left_formula, right_formula: len(left_formula.variables & right_formula.variables),
+            lambda left_formula, right_formula: len(
+                left_formula.variables & right_formula.variables
+            ),
             np.int64,
         )
         if batch is not None:
@@ -585,7 +641,9 @@ class SharedOperators(BinOp):
         batch = _apply_binary_batch(
             left,
             right,
-            lambda left_formula, right_formula: len(left_formula.operators & right_formula.operators),
+            lambda left_formula, right_formula: len(
+                left_formula.operators & right_formula.operators
+            ),
             np.int64,
         )
         if batch is not None:
@@ -622,7 +680,9 @@ class SharedSymbols(BinOp):
         batch = _apply_binary_batch(
             left,
             right,
-            lambda left_formula, right_formula: len(left_formula.symbols & right_formula.symbols),
+            lambda left_formula, right_formula: len(
+                left_formula.symbols & right_formula.symbols
+            ),
             np.int64,
         )
         if batch is not None:
@@ -640,6 +700,7 @@ class SharedSymbols(BinOp):
 
 __all__ = [
     "Formula",
+    "FormulaArray",
     "UnOp",
     "TreeSize",
     "TreeDepth",
