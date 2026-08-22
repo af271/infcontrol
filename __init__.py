@@ -2,6 +2,7 @@
 
 from infcontrol.canonicalize import canonicalize, is_variable, num_variables, tree_depth, tree_size, variables
 from infcontrol.dataset import DATASET_FILE, Dataset, DatasetRecord
+from infcontrol.logit_fitter import LogitFitter
 from infcontrol.operators import (
     Formula,
     FormulaEqual,
@@ -22,6 +23,7 @@ __all__ = [
     "DATASET_FILE",
     "Dataset",
     "DatasetRecord",
+    "LogitFitter",
     "canonicalize",
     "is_variable",
     "tree_size",
