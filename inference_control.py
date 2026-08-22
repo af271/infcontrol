@@ -60,6 +60,9 @@ class InferenceControl:
         max_popped: int | None = 1000,
         level: int = 0,
         fitter_kwargs: dict[str, Any] | None = None,
+        validation_fraction: float = 0.2,
+        test_fraction: float = 0.2,
+        split_seed: int = 42,
     ) -> None:
         self.csv_path = Path(csv_path)
         self.output_dir = Path(output_dir) if output_dir is not None else None
@@ -67,7 +70,6 @@ class InferenceControl:
         self.rows = self._read_rows(self.csv_path)
         if not self.rows:
             raise ValueError("CSV must contain at least one row with two formulas")
-
         self.features, self.labels = self._arrays_from_rows(self.rows)
         self.targets = [
             Value(
@@ -78,7 +80,13 @@ class InferenceControl:
             )
             for column, name in enumerate(("goal", "candidate"))
         ]
-        self.fitter = LogitFitter(self.labels, **(fitter_kwargs or {}))
+        self.fitter = LogitFitter(
+            self.labels,
+            validation_fraction=validation_fraction,
+            test_fraction=test_fraction,
+            split_seed=split_seed,
+            **(fitter_kwargs or {}),
+        )
         self.enum = Wunderbaum(
             [(operator(dl=8), 0) for operator in operators], level=level
         )
@@ -132,6 +140,10 @@ class InferenceControl:
             if graph_path is not None:
                 self.saved_graphs.append(graph_path)
             yield graph, coefficient
+
+    def log_loss(self, split: str = "train") -> float:
+        """Return the current model's mean log-loss on a data split."""
+        return self.fitter.log_loss(split)
 
     def _save_graph(self, graph: Graph, mem: Any, index: int) -> Path | None:
         if self.output_dir is None:

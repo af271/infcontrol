@@ -13,6 +13,12 @@ def test_inference_control_runs_wunderbaum_features(tmp_path):
         {"goal": ["->", "c", "d"], "candidate": ["->", "e", "f"], "used": "False"},
         {"goal": ["->", "a", "b"], "candidate": ["->", "a", "b"], "used": "True"},
         {"goal": ["->", "c", "d"], "candidate": ["->", "e", "f"], "used": "False"},
+        {"goal": ["->", "a", "b"], "candidate": ["->", "a", "b"], "used": "True"},
+        {"goal": ["->", "c", "d"], "candidate": ["->", "e", "f"], "used": "False"},
+        {"goal": ["->", "a", "b"], "candidate": ["->", "a", "b"], "used": "True"},
+        {"goal": ["->", "c", "d"], "candidate": ["->", "e", "f"], "used": "False"},
+        {"goal": ["->", "a", "b"], "candidate": ["->", "a", "b"], "used": "True"},
+        {"goal": ["->", "c", "d"], "candidate": ["->", "e", "f"], "used": "False"},
     ]
     with csv_path.open("w", encoding="utf-8", newline="") as file:
         writer = csv.DictWriter(file, fieldnames=["goal", "candidate", "used"])
@@ -31,6 +37,6 @@ def test_inference_control_runs_wunderbaum_features(tmp_path):
 
     assert accepted
     assert len(controller.fitter.coefficients) == len(accepted)
-    assert controller.fitter.log_loss < np.log(2.0)
+    assert controller.fitter.log_loss() < np.log(2.0)
     assert len(controller.saved_graphs) == len(accepted)
     assert all(path.exists() for path in controller.saved_graphs)
