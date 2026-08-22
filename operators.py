@@ -27,6 +27,7 @@ import numpy as np
 
 from infcontrol.canonicalize import canonicalize, is_variable
 from william.library.base import BinOp, UnaryOp
+from william.library.description import desc_len
 from william.library.types import Array
 
 Tree = list["TreeNode"]
@@ -82,6 +83,17 @@ class Formula:
         object.__setattr__(self, "symbol_histogram", dict(stats.symbol_histogram))
         object.__setattr__(self, "root_operator", stats.root_operator)
         object.__setattr__(self, "implication_chain_length", stats.implication_chain_length)
+
+    def desc_len(self, mode: str = "use_gaussian") -> float:
+        return desc_len(self.canonical_tree, mode=mode)
+
+    def __str__(self) -> str:
+        def format_node(node: FrozenNode) -> str:
+            if isinstance(node, tuple):
+                return f"({' '.join(format_node(child) for child in node)})"
+            return str(node)
+
+        return format_node(self.canonical_tree)
 
 
 @dataclass(slots=True)

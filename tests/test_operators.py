@@ -1,3 +1,5 @@
+from itertools import islice
+
 import numpy as np
 
 from infcontrol.operators import (
@@ -15,11 +17,16 @@ from infcontrol.operators import (
     TreeDepth,
     TreeSize,
 )
+from william.library.base import Value
+from william.propagation_py import RandomPropagation as RandomPropagationPy
+from william.structures import Graph
+from william.wunderbaum import Wunderbaum
 
 
 def test_formula_caches_structure() -> None:
     f = Formula(["->", ["→", "θ", "τ"], ["→", "ψ", "θ"]])
 
+    assert str(f) == "(-> (→ v0 v1) (→ v2 v0))"
     assert f.size == 10
     assert f.depth == 2
     assert f.variables == {"v0", "v1", "v2"}
@@ -89,3 +96,46 @@ def test_vectorized_binary_operators_pairwise_and_scalar_broadcast() -> None:
     scalar_vars = SharedVariables()._call(right, f1)
     assert np.array_equal(scalar_eq, np.array([True, False]))
     assert np.array_equal(scalar_vars, np.array([3, 3]))
+
+
+def test_wunderbaum_enum_only_with_hyperon_operators() -> None:
+    hyperon_ops = [
+        TreeSize,
+        TreeDepth,
+        NumVariables,
+        NumOperators,
+        RootOperator,
+        OperatorHistogram,
+        SymbolHistogram,
+        ImplicationChainLength,
+        FormulaEqual,
+        SharedVariables,
+        SharedOperators,
+        SharedSymbols,
+    ]
+    enum = Wunderbaum([(op(dl=8), 0) for op in hyperon_ops], level=0)
+    prop_class = RandomPropagationPy(partial=False, cache=False)
+
+    targets = [
+        Value(Formula(["->", "theta", "psi"]), spec=Formula, permeable=False, name="target1"),
+        Value(Formula(["->", "alpha", "beta"]), spec=Formula, permeable=False, name="target2"),
+    ]
+
+    items = list(
+        islice(enum.iterate(prop_class, targets, max_popped=100, enum_only=True), 5)
+    )
+    assert items, "enum_only should produce at least one DAG"
+
+    for graph, _dl, mem, _bn in items:
+        graph.render()
+        breakpoint()
+        leaves = list(graph.leaves())
+        assert leaves, "Generated DAG should have leaves"
+
+        leaf_values = [mem[leaf].val if leaf in mem else leaf.output for leaf in leaves]
+        for target in targets:
+            assert any(value.equals(target) for value in leaf_values), "Every target should appear among leaves"
+
+        roots = list(Graph(leaves).roots())
+        non_leaf_roots = [root for root in roots if root not in leaves]
+        assert len(non_leaf_roots) <= 1, "There should be at most one root that is not also a leaf"
