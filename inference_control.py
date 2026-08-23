@@ -77,13 +77,17 @@ class InferenceControl:
         validation_fraction: float = 0.2,
         test_fraction: float = 0.2,
         split_seed: int = 42,
+        data_fraction: float = 1.0,
     ) -> None:
         self.csv_path = Path(csv_path)
         self.output_dir = Path(output_dir) if output_dir is not None else None
         self.max_popped = max_popped
+        if not 0 < data_fraction <= 1:
+            raise ValueError("data_fraction must be greater than 0 and at most 1")
         self.rows = self._read_rows(self.csv_path)
         if not self.rows:
             raise ValueError("CSV must contain at least one row with two formulas")
+        self.rows = self._sample_rows_by_goal(self.rows, data_fraction, split_seed)
         self.features, self.labels = self._arrays_from_rows(self.rows)
         self.targets = [
             Value(
@@ -94,7 +98,7 @@ class InferenceControl:
             )
             for column, name in enumerate(("goal", "candidate"))
         ]
-        self.targets.append(Value(1., spec=float, permeable=True, name="one"))
+        self.targets.append(Value(1.0, spec=float, permeable=True, name="one"))
         self.fitter = LogitFitter(
             self.labels,
             groups=self.features[:, 0],
@@ -109,6 +113,27 @@ class InferenceControl:
         self.prop_class = RandomPropagationPy(partial=False, cache=False)
         self.saved_graphs: list[Path] = []
         self.last_mem: Any | None = None
+
+    @staticmethod
+    def _sample_rows_by_goal(
+        rows: list[dict[str, str]], fraction: float, seed: int
+    ) -> list[dict[str, str]]:
+        if fraction == 1:
+            return rows
+
+        grouped: dict[str, list[dict[str, str]]] = {}
+        for row in rows:
+            grouped.setdefault(row["goal"], []).append(row)
+
+        group_names = list(grouped)
+        np.random.default_rng(seed).shuffle(group_names)
+        target_size = int(np.ceil(len(rows) * fraction))
+        selected: list[dict[str, str]] = []
+        for group_name in group_names:
+            selected.extend(grouped[group_name])
+            if len(selected) >= target_size:
+                break
+        return selected
 
     @staticmethod
     def _read_rows(csv_path: Path) -> list[dict[str, str]]:
@@ -147,6 +172,8 @@ class InferenceControl:
             ):
                 continue
             if feature.dtype.kind not in "iufb":
+                continue
+            if not np.all(np.isfinite(feature)):
                 continue
 
             coefficient = self.fitter.evaluate(feature)
@@ -233,7 +260,7 @@ class InferenceControl:
 
     def print_metrics(
         self,
-        recall_ks: tuple[int, ...] = (5, 50, 200, 500),
+        recall_ks: tuple[int, ...] = (5, 50, 200),
         recall_target: float = 0.8,
     ) -> None:
         headers = [
