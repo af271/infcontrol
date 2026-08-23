@@ -183,10 +183,51 @@ class InferenceControl:
             recalls.append(used_in_top_k / total_used)
         return float(np.mean(recalls)) if recalls else float("nan")
 
-    def print_metrics(self, recall_ks: tuple[int, ...] = (5, 50, 200, 300)) -> None:
-        headers = ["split", "log_loss", "geo_mean_p", "accuracy"] + [
-            f"recall@{k}" for k in recall_ks
-        ]
+    def k_at_recall(self, split: str, recall_target: float = 0.8) -> float:
+        """Return the mean smallest k needed to reach ``recall_target`` per goal."""
+        if not 0 < recall_target <= 1:
+            raise ValueError("recall_target must be greater than 0 and at most 1")
+
+        indices = {
+            "train": self.fitter.train_indices,
+            "validation": self.fitter.validation_indices,
+            "test": self.fitter.test_indices,
+        }[split]
+        probabilities = self.fitter.probabilities[indices]
+        goals = self.features[indices, 0]
+        labels = self.labels[indices]
+
+        grouped: dict[str, list[tuple[float, float]]] = {}
+        for goal, probability, label in zip(goals, probabilities, labels):
+            grouped.setdefault(str(goal), []).append((probability, label))
+
+        required_ks = []
+        for candidates in grouped.values():
+            total_used = sum(label == 1.0 for _, label in candidates)
+            if total_used == 0:
+                continue
+            required_hits = int(np.ceil(recall_target * total_used))
+            ranked = sorted(candidates, key=lambda item: item[0], reverse=True)
+            hits = 0
+            for rank, (_, label) in enumerate(ranked, start=1):
+                hits += label == 1.0
+                if hits >= required_hits:
+                    required_ks.append(rank)
+                    break
+        return float(np.mean(required_ks)) if required_ks else float("nan")
+
+    def print_metrics(
+        self,
+        recall_ks: tuple[int, ...] = (5, 50, 200, 500),
+        recall_target: float = 0.8,
+    ) -> None:
+        headers = [
+            "split",
+            "log_loss",
+            "geo_mean_p",
+            "accuracy",
+            f"k@recall>={recall_target:.0%}",
+        ] + [f"recall@{k}" for k in recall_ks]
         rows = []
         for split in ("train", "validation", "test"):
             loss = self.log_loss(split)
@@ -196,6 +237,7 @@ class InferenceControl:
                     f"{loss:.6f}",
                     f"{np.exp(-loss):.6f}",
                     f"{self.accuracy(split):.6f}",
+                    f"{self.k_at_recall(split, recall_target):.2f}",
                     *[f"{self.recall_at_k(split, k):.6f}" for k in recall_ks],
                 ]
             )
