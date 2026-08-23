@@ -10,6 +10,8 @@ from typing import Any
 
 import numpy as np
 from william.library.base import Value
+from william.library.basic_ops import Equal, Len, LessThan
+from william.library.complex_ops import Abs, Cos, Exp, Log, Mean, Sin, Sqrt, Sum, Tanh
 from william.library.types import Array
 from william.propagation_py import RandomPropagation as RandomPropagationPy
 from william.structures import Graph
@@ -46,6 +48,18 @@ DEFAULT_OPERATORS = (
     SharedVariables,
     SharedOperators,
     SharedSymbols,
+    Abs,
+    Sum,
+    Mean,
+    Exp,
+    Log,
+    Sqrt,
+    Sin,
+    Cos,
+    Tanh,
+    Len,
+    LessThan,
+    Equal,
 )
 
 
@@ -80,6 +94,7 @@ class InferenceControl:
             )
             for column, name in enumerate(("goal", "candidate"))
         ]
+        self.targets.append(Value(1., spec=float, permeable=True, name="one"))
         self.fitter = LogitFitter(
             self.labels,
             groups=self.features[:, 0],

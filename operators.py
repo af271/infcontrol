@@ -306,15 +306,15 @@ UnOp = UnaryOp
 class TreeSize(UnOp):
     _raw_specs = [
         (tuple[Formula], int),
-        (tuple[list[Formula]], Array[int]),
-        (tuple[tuple[Formula]], Array[int]),
-        (tuple[Array[Formula]], Array[int]),
+        (tuple[list[Formula]], Array[float]),
+        (tuple[tuple[Formula]], Array[float]),
+        (tuple[Array[Formula]], Array[float]),
     ]
 
     def _call(
         self, formula: Formula | list[Formula] | tuple[Formula] | np.ndarray
     ) -> int | np.ndarray:
-        batch = _apply_unary_batch(formula, lambda f: f.size, np.int64)
+        batch = _apply_unary_batch(formula, lambda f: f.size, np.float64)
         if batch is not None:
             return batch
         return formula.size
@@ -322,7 +322,7 @@ class TreeSize(UnOp):
     @staticmethod
     def _suitable(output: Any) -> bool:
         if isinstance(output, np.ndarray):
-            return output.dtype.kind in ("i", "u") and np.all(output >= 1)
+            return output.dtype.kind in ("i", "u", "f") and np.all(output >= 1)
         return isinstance(output, int) and output >= 1
 
     @staticmethod
@@ -333,15 +333,15 @@ class TreeSize(UnOp):
 class TreeDepth(UnOp):
     _raw_specs = [
         (tuple[Formula], int),
-        (tuple[list[Formula]], Array[int]),
-        (tuple[tuple[Formula]], Array[int]),
-        (tuple[Array[Formula]], Array[int]),
+        (tuple[list[Formula]], Array[float]),
+        (tuple[tuple[Formula]], Array[float]),
+        (tuple[Array[Formula]], Array[float]),
     ]
 
     def _call(
         self, formula: Formula | list[Formula] | tuple[Formula] | np.ndarray
     ) -> int | np.ndarray:
-        batch = _apply_unary_batch(formula, lambda f: f.depth, np.int64)
+        batch = _apply_unary_batch(formula, lambda f: f.depth, np.float64)
         if batch is not None:
             return batch
         return formula.depth
@@ -349,7 +349,7 @@ class TreeDepth(UnOp):
     @staticmethod
     def _suitable(output: Any) -> bool:
         if isinstance(output, np.ndarray):
-            return output.dtype.kind in ("i", "u") and np.all(output >= 0)
+            return output.dtype.kind in ("i", "u", "f") and np.all(output >= 0)
         return isinstance(output, int) and output >= 0
 
     @staticmethod
@@ -365,15 +365,15 @@ class Histogram(dict[str, int]):
 class NumVariables(UnOp):
     _raw_specs = [
         (tuple[Formula], int),
-        (tuple[list[Formula]], Array[int]),
-        (tuple[tuple[Formula]], Array[int]),
-        (tuple[Array[Formula]], Array[int]),
+        (tuple[list[Formula]], Array[float]),
+        (tuple[tuple[Formula]], Array[float]),
+        (tuple[Array[Formula]], Array[float]),
     ]
 
     def _call(
         self, formula: Formula | list[Formula] | tuple[Formula] | np.ndarray
     ) -> int | np.ndarray:
-        batch = _apply_unary_batch(formula, lambda f: len(f.variables), np.int64)
+        batch = _apply_unary_batch(formula, lambda f: len(f.variables), np.float64)
         if batch is not None:
             return batch
         return len(formula.variables)
@@ -381,7 +381,7 @@ class NumVariables(UnOp):
     @staticmethod
     def _suitable(output: Any) -> bool:
         if isinstance(output, np.ndarray):
-            return output.dtype.kind in ("i", "u") and np.all(output >= 0)
+            return output.dtype.kind in ("i", "u", "f") and np.all(output >= 0)
         return isinstance(output, int) and output >= 0
 
     @staticmethod
@@ -392,16 +392,16 @@ class NumVariables(UnOp):
 class NumOperators(UnOp):
     _raw_specs = [
         (tuple[Formula], int),
-        (tuple[list[Formula]], Array[int]),
-        (tuple[tuple[Formula]], Array[int]),
-        (tuple[Array[Formula]], Array[int]),
+        (tuple[list[Formula]], Array[float]),
+        (tuple[tuple[Formula]], Array[float]),
+        (tuple[Array[Formula]], Array[float]),
     ]
 
     def _call(
         self, formula: Formula | list[Formula] | tuple[Formula] | np.ndarray
     ) -> int | np.ndarray:
         batch = _apply_unary_batch(
-            formula, lambda f: sum(f.operator_histogram.values()), np.int64
+            formula, lambda f: sum(f.operator_histogram.values()), np.float64
         )
         if batch is not None:
             return batch
@@ -410,7 +410,7 @@ class NumOperators(UnOp):
     @staticmethod
     def _suitable(output: Any) -> bool:
         if isinstance(output, np.ndarray):
-            return output.dtype.kind in ("i", "u") and np.all(output >= 0)
+            return output.dtype.kind in ("i", "u", "f") and np.all(output >= 0)
         return isinstance(output, int) and output >= 0
 
     @staticmethod
@@ -518,16 +518,16 @@ class SymbolHistogram(UnOp):
 class ImplicationChainLength(UnOp):
     _raw_specs = [
         (tuple[Formula], int),
-        (tuple[list[Formula]], Array[int]),
-        (tuple[tuple[Formula]], Array[int]),
-        (tuple[Array[Formula]], Array[int]),
+        (tuple[list[Formula]], Array[float]),
+        (tuple[tuple[Formula]], Array[float]),
+        (tuple[Array[Formula]], Array[float]),
     ]
 
     def _call(
         self, formula: Formula | list[Formula] | tuple[Formula] | np.ndarray
     ) -> int | np.ndarray:
         batch = _apply_unary_batch(
-            formula, lambda f: f.implication_chain_length, np.int64
+            formula, lambda f: f.implication_chain_length, np.float64
         )
         if batch is not None:
             return batch
@@ -584,13 +584,13 @@ class FormulaEqual(BinOp):
 class SharedVariables(BinOp):
     _raw_specs = [
         (tuple[Formula, Formula], int),
-        (tuple[list[Formula], list[Formula]], Array[int]),
-        (tuple[tuple[Formula], tuple[Formula]], Array[int]),
-        (tuple[Array[Formula], Array[Formula]], Array[int]),
-        (tuple[Formula, list[Formula]], Array[int]),
-        (tuple[list[Formula], Formula], Array[int]),
-        (tuple[Formula, Array[Formula]], Array[int]),
-        (tuple[Array[Formula], Formula], Array[int]),
+        (tuple[list[Formula], list[Formula]], Array[float]),
+        (tuple[tuple[Formula], tuple[Formula]], Array[float]),
+        (tuple[Array[Formula], Array[Formula]], Array[float]),
+        (tuple[Formula, list[Formula]], Array[float]),
+        (tuple[list[Formula], Formula], Array[float]),
+        (tuple[Formula, Array[Formula]], Array[float]),
+        (tuple[Array[Formula], Formula], Array[float]),
     ]
     commutative = True
 
@@ -605,7 +605,7 @@ class SharedVariables(BinOp):
             lambda left_formula, right_formula: len(
                 left_formula.variables & right_formula.variables
             ),
-            np.int64,
+            np.float64,
         )
         if batch is not None:
             return batch
@@ -623,13 +623,13 @@ class SharedVariables(BinOp):
 class SharedOperators(BinOp):
     _raw_specs = [
         (tuple[Formula, Formula], int),
-        (tuple[list[Formula], list[Formula]], Array[int]),
-        (tuple[tuple[Formula], tuple[Formula]], Array[int]),
-        (tuple[Array[Formula], Array[Formula]], Array[int]),
-        (tuple[Formula, list[Formula]], Array[int]),
-        (tuple[list[Formula], Formula], Array[int]),
-        (tuple[Formula, Array[Formula]], Array[int]),
-        (tuple[Array[Formula], Formula], Array[int]),
+        (tuple[list[Formula], list[Formula]], Array[float]),
+        (tuple[tuple[Formula], tuple[Formula]], Array[float]),
+        (tuple[Array[Formula], Array[Formula]], Array[float]),
+        (tuple[Formula, list[Formula]], Array[float]),
+        (tuple[list[Formula], Formula], Array[float]),
+        (tuple[Formula, Array[Formula]], Array[float]),
+        (tuple[Array[Formula], Formula], Array[float]),
     ]
     commutative = True
 
@@ -644,7 +644,7 @@ class SharedOperators(BinOp):
             lambda left_formula, right_formula: len(
                 left_formula.operators & right_formula.operators
             ),
-            np.int64,
+            np.float64,
         )
         if batch is not None:
             return batch
@@ -662,13 +662,13 @@ class SharedOperators(BinOp):
 class SharedSymbols(BinOp):
     _raw_specs = [
         (tuple[Formula, Formula], int),
-        (tuple[list[Formula], list[Formula]], Array[int]),
-        (tuple[tuple[Formula], tuple[Formula]], Array[int]),
-        (tuple[Array[Formula], Array[Formula]], Array[int]),
-        (tuple[Formula, list[Formula]], Array[int]),
-        (tuple[list[Formula], Formula], Array[int]),
-        (tuple[Formula, Array[Formula]], Array[int]),
-        (tuple[Array[Formula], Formula], Array[int]),
+        (tuple[list[Formula], list[Formula]], Array[float]),
+        (tuple[tuple[Formula], tuple[Formula]], Array[float]),
+        (tuple[Array[Formula], Array[Formula]], Array[float]),
+        (tuple[Formula, list[Formula]], Array[float]),
+        (tuple[list[Formula], Formula], Array[float]),
+        (tuple[Formula, Array[Formula]], Array[float]),
+        (tuple[Array[Formula], Formula], Array[float]),
     ]
     commutative = True
 
@@ -683,7 +683,7 @@ class SharedSymbols(BinOp):
             lambda left_formula, right_formula: len(
                 left_formula.symbols & right_formula.symbols
             ),
-            np.int64,
+            np.float64,
         )
         if batch is not None:
             return batch

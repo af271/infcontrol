@@ -34,6 +34,8 @@ def test_inference_control_runs_wunderbaum_features(tmp_path):
 
     output_dir = tmp_path / "graphs"
     controller = InferenceControl(csv_path, output_dir=output_dir, max_popped=1000)
+    assert controller.targets[-1].name == "one"
+    assert controller.targets[-1].value == 1
     split_groups = [
         {str(controller.features[index, 0]) for index in indices}
         for indices in (

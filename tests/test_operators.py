@@ -67,12 +67,14 @@ def test_vectorized_unary_operators() -> None:
     f2 = Formula(["->", ["→", "α", "β"], "γ"])
     batch = np.array([f1, f2], dtype=object)
 
-    assert np.array_equal(TreeSize()._call(batch), np.array([10, 7]))
-    assert np.array_equal(TreeDepth()._call(batch), np.array([2, 2]))
-    assert np.array_equal(NumVariables()._call(batch), np.array([3, 3]))
-    assert np.array_equal(NumOperators()._call(batch), np.array([3, 2]))
+    assert np.array_equal(TreeSize()._call(batch), np.array([10, 7], dtype=float))
+    assert np.array_equal(TreeDepth()._call(batch), np.array([2, 2], dtype=float))
+    assert np.array_equal(NumVariables()._call(batch), np.array([3, 3], dtype=float))
+    assert np.array_equal(NumOperators()._call(batch), np.array([3, 2], dtype=float))
     assert np.array_equal(RootOperator()._call(batch), np.array(["->", "->"]))
-    assert np.array_equal(ImplicationChainLength()._call(batch), np.array([2, 1]))
+    assert np.array_equal(
+        ImplicationChainLength()._call(batch), np.array([2, 1], dtype=float)
+    )
 
 
 def test_vectorized_binary_operators_pairwise_and_scalar_broadcast() -> None:
@@ -86,6 +88,10 @@ def test_vectorized_binary_operators_pairwise_and_scalar_broadcast() -> None:
     pair_vars = SharedVariables()._call(left, right)
     pair_ops = SharedOperators()._call(left, right)
     pair_symbols = SharedSymbols()._call(left, right)
+
+    assert pair_vars.dtype == np.dtype(float)
+    assert pair_ops.dtype == np.dtype(float)
+    assert pair_symbols.dtype == np.dtype(float)
 
     assert np.array_equal(pair_eq, np.array([True, False]))
     assert np.array_equal(pair_vars, np.array([3, 3]))
@@ -117,8 +123,18 @@ def test_wunderbaum_enum_only_with_hyperon_operators() -> None:
     prop_class = RandomPropagationPy(partial=False, cache=False)
 
     targets = [
-        Value(Formula(["->", "theta", "psi"]), spec=Formula, permeable=False, name="target1"),
-        Value(Formula(["->", "alpha", "beta"]), spec=Formula, permeable=False, name="target2"),
+        Value(
+            Formula(["->", "theta", "psi"]),
+            spec=Formula,
+            permeable=False,
+            name="target1",
+        ),
+        Value(
+            Formula(["->", "alpha", "beta"]),
+            spec=Formula,
+            permeable=False,
+            name="target2",
+        ),
     ]
 
     items = list(enum.iterate(prop_class, targets, max_popped=100, enum_only=True))
@@ -130,8 +146,12 @@ def test_wunderbaum_enum_only_with_hyperon_operators() -> None:
 
         leaf_values = [mem[leaf].val if leaf in mem else leaf.output for leaf in leaves]
         for target in targets:
-            assert any(value.equals(target) for value in leaf_values), "Every target should appear among leaves"
+            assert any(value.equals(target) for value in leaf_values), (
+                "Every target should appear among leaves"
+            )
 
         roots = list(Graph(leaves).roots())
         non_leaf_roots = [root for root in roots if root not in leaves]
-        assert len(non_leaf_roots) <= 1, "There should be at most one root that is not also a leaf"
+        assert len(non_leaf_roots) <= 1, (
+            "There should be at most one root that is not also a leaf"
+        )
