@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
+from scipy.optimize import minimize
 
 
 class LogitFitter:
@@ -190,11 +191,59 @@ class LogitFitter:
         ):
             return None
 
-        self.strengths = candidate_strengths
+        old_coefficients = self.coefficients.copy()
+        old_features = self.features.copy()
+        old_strengths = self.strengths.copy()
+
         self.coefficients.append(coefficient)
         self.features.append(values.copy())
-        self.losses.append(candidate_loss)
-        return coefficient
+        refit_coefficients = self._refit_coefficients()
+        refit_strengths = self.initial_strength + sum(
+            coefficient * feature
+            for coefficient, feature in zip(refit_coefficients, self.features)
+        )
+        refit_validation_loss = self._log_loss_for(
+            refit_strengths[self.validation_indices], self.y[self.validation_indices]
+        )
+        if (
+            not np.isfinite(refit_validation_loss)
+            or refit_validation_loss >= validation_baseline
+        ):
+            self.coefficients = old_coefficients
+            self.features = old_features
+            self.strengths = old_strengths
+            return None
+
+        self.coefficients = refit_coefficients.tolist()
+        self.strengths = refit_strengths
+        self.losses.append(
+            self._log_loss_for(
+                refit_strengths[self.train_indices], self.y[self.train_indices]
+            )
+        )
+        return self.coefficients[-1]
+
+    def _refit_coefficients(self) -> np.ndarray:
+        """Refit all accepted feature coefficients on the training split."""
+        feature_matrix = np.column_stack(
+            [feature[self.train_indices] for feature in self.features]
+        )
+        train_labels = self.y[self.train_indices]
+        train_strengths = np.full(train_labels.shape, self.initial_strength)
+
+        def objective(coefficients: np.ndarray) -> float:
+            logits = train_strengths + feature_matrix @ coefficients
+            return self._log_loss_for(logits, train_labels)
+
+        result = minimize(
+            objective,
+            x0=np.asarray(self.coefficients, dtype=float),
+            method="BFGS",
+            options={"gtol": self.tol, "maxiter": self.max_iter},
+        )
+        if not np.all(np.isfinite(result.x)):
+            raise ValueError("coefficient refit produced non-finite values")
+        return result.x
 
     @property
     def validation_log_loss(self) -> float:

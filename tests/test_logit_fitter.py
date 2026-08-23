@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import numpy as np
 import pytest
 
@@ -46,6 +48,23 @@ def test_logit_fitter_rejects_feature_without_improvement() -> None:
     np.testing.assert_array_equal(fitter.strengths, strengths)
     assert fitter.coefficients == coefficients
     assert len(fitter.features) == 1
+
+
+def test_logit_fitter_refits_all_coefficients_after_acceptance() -> None:
+    fitter = LogitFitter(
+        [0, 1] * 10,
+        groups=[f"goal-{index}" for index in range(20)],
+        validation_fraction=0.5,
+        test_fraction=0,
+    )
+
+    with patch.object(
+        fitter, "_refit_coefficients", wraps=fitter._refit_coefficients
+    ) as refit:
+        coefficient = fitter.evaluate([-2.0, 2.0] * 10)
+
+    assert coefficient is not None
+    refit.assert_called_once()
 
 
 def test_logit_fitter_acceptance_uses_validation_loss() -> None:
