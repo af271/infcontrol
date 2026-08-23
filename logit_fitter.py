@@ -22,6 +22,7 @@ class LogitFitter:
     def __init__(
         self,
         y: Any,
+        groups: Any,
         validation_fraction: float = 0.2,
         test_fraction: float = 0.2,
         split_seed: int = 42,
@@ -33,6 +34,11 @@ class LogitFitter:
             raise ValueError("y must be a non-empty one-dimensional vector")
         if not np.all(np.isfinite(self.y)) or not np.all(np.isin(self.y, (0.0, 1.0))):
             raise ValueError("y must contain only finite 0 and 1 values")
+        self.groups = np.asarray(groups, dtype=object)
+        if self.groups.shape != self.y.shape:
+            raise ValueError(
+                f"groups must have shape {self.y.shape}, got {self.groups.shape}"
+            )
         if validation_fraction <= 0 or test_fraction < 0:
             raise ValueError(
                 "validation_fraction must be positive and test_fraction non-negative"
@@ -47,7 +53,7 @@ class LogitFitter:
             raise ValueError("tol must be positive")
         self.train_indices, self.validation_indices, self.test_indices = (
             self._split_indices(
-                self.y.size, validation_fraction, test_fraction, split_seed
+                self.groups, validation_fraction, test_fraction, split_seed
             )
         )
         self.prior_probability = float(np.mean(self.y[self.train_indices]))
@@ -68,23 +74,30 @@ class LogitFitter:
 
     @staticmethod
     def _split_indices(
-        size: int, validation_fraction: float, test_fraction: float, seed: int
+        groups: np.ndarray, validation_fraction: float, test_fraction: float, seed: int
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        indices = np.random.default_rng(seed).permutation(size)
-        test_size = int(size * test_fraction)
-        validation_size = max(1, int(size * validation_fraction))
+        group_names = np.asarray([str(group) for group in groups], dtype=object)
+        unique_groups, inverse = np.unique(group_names, return_inverse=True)
+        shuffled_groups = np.random.default_rng(seed).permutation(len(unique_groups))
+        test_size = int(len(unique_groups) * test_fraction)
+        validation_size = max(1, int(len(unique_groups) * validation_fraction))
         if test_fraction > 0:
             test_size = max(1, test_size)
-        if validation_size + test_size >= size:
+        if validation_size + test_size >= len(unique_groups):
             raise ValueError(
                 "dataset is too small for the requested train/validation/test split"
             )
-        test_start = size - test_size
+        test_start = len(unique_groups) - test_size
         validation_start = test_start - validation_size
+        group_slices = (
+            shuffled_groups[:validation_start],
+            shuffled_groups[validation_start:test_start],
+            shuffled_groups[test_start:],
+        )
         return (
-            indices[:validation_start],
-            indices[validation_start:test_start],
-            indices[test_start:],
+            np.flatnonzero(np.isin(inverse, group_slices[0])),
+            np.flatnonzero(np.isin(inverse, group_slices[1])),
+            np.flatnonzero(np.isin(inverse, group_slices[2])),
         )
 
     @staticmethod

@@ -82,6 +82,7 @@ class InferenceControl:
         ]
         self.fitter = LogitFitter(
             self.labels,
+            groups=self.features[:, 0],
             validation_fraction=validation_fraction,
             test_fraction=test_fraction,
             split_seed=split_seed,
@@ -182,7 +183,7 @@ class InferenceControl:
             recalls.append(used_in_top_k / total_used)
         return float(np.mean(recalls)) if recalls else float("nan")
 
-    def print_metrics(self, recall_ks: tuple[int, ...] = (5, 10, 50)) -> None:
+    def print_metrics(self, recall_ks: tuple[int, ...] = (5, 50, 200, 300)) -> None:
         headers = ["split", "log_loss", "geo_mean_p", "accuracy"] + [
             f"recall@{k}" for k in recall_ks
         ]
