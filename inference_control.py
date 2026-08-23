@@ -147,6 +147,70 @@ class InferenceControl:
         """Return the current model's mean log-loss on a data split."""
         return self.fitter.log_loss(split)
 
+    def accuracy(self, split: str) -> float:
+        indices = {
+            "train": self.fitter.train_indices,
+            "validation": self.fitter.validation_indices,
+            "test": self.fitter.test_indices,
+        }[split]
+        predictions = self.fitter.probabilities[indices] >= 0.5
+        return float(np.mean(predictions == self.labels[indices]))
+
+    def recall_at_k(self, split: str, k: int) -> float:
+        if k <= 0:
+            raise ValueError("k must be positive")
+        indices = {
+            "train": self.fitter.train_indices,
+            "validation": self.fitter.validation_indices,
+            "test": self.fitter.test_indices,
+        }[split]
+        probabilities = self.fitter.probabilities[indices]
+        goals = self.features[indices, 0]
+        labels = self.labels[indices]
+
+        grouped: dict[str, list[tuple[float, float]]] = {}
+        for goal, probability, label in zip(goals, probabilities, labels):
+            grouped.setdefault(str(goal), []).append((probability, label))
+
+        recalls = []
+        for candidates in grouped.values():
+            total_used = sum(label == 1.0 for _, label in candidates)
+            if total_used == 0:
+                continue
+            ranked = sorted(candidates, key=lambda item: item[0], reverse=True)
+            used_in_top_k = sum(label == 1.0 for _, label in ranked[:k])
+            recalls.append(used_in_top_k / total_used)
+        return float(np.mean(recalls)) if recalls else float("nan")
+
+    def print_metrics(self, recall_ks: tuple[int, ...] = (5, 10, 50)) -> None:
+        headers = ["split", "log_loss", "geo_mean_p", "accuracy"] + [
+            f"recall@{k}" for k in recall_ks
+        ]
+        rows = []
+        for split in ("train", "validation", "test"):
+            loss = self.log_loss(split)
+            rows.append(
+                [
+                    split,
+                    f"{loss:.6f}",
+                    f"{np.exp(-loss):.6f}",
+                    f"{self.accuracy(split):.6f}",
+                    *[f"{self.recall_at_k(split, k):.6f}" for k in recall_ks],
+                ]
+            )
+
+        widths = [
+            max(len(str(value)) for value in [header, *(row[i] for row in rows)])
+            for i, header in enumerate(headers)
+        ]
+        print(f"features: {len(self.fitter.features)}")
+        print(" | ".join(header.ljust(width) for header, width in zip(headers, widths)))
+        print("-+-".join("-" * width for width in widths))
+        for row in rows:
+            print(
+                " | ".join(str(value).ljust(width) for value, width in zip(row, widths))
+            )
+
     def _save_graph(self, graph: Graph, mem: Any, index: int) -> Path | None:
         if self.output_dir is None:
             return None
