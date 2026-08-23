@@ -11,32 +11,33 @@ from typing import Any
 import numpy as np
 from william.library.base import Value
 from william.library.basic_ops import Equal, Len, LessThan
-from william.library.complex_ops import Abs, Cos, Exp, Log, Mean, Sin, Sqrt, Sum, Tanh
+from william.library.complex_ops import Abs, Mean, Sqrt, Sum
 from william.library.types import Array
+from william.nvmap import MapEntry, NodeValueMap
 from william.propagation_py import RandomPropagation as RandomPropagationPy
 from william.structures import Graph
 from william.wunderbaum import Wunderbaum
 
 from infcontrol.logit_fitter import LogitFitter
 from infcontrol.operators import (
+    AbsDifference,
     Formula,
     FormulaArray,
     FormulaEqual,
-    AbsDifference,
     ImplicationChainLength,
     MaxSharedSubtreeSize,
     NumOperators,
     NumVariables,
     OperatorCosineSimilarity,
-    OperatorL1Distance,
     OperatorHistogram,
+    OperatorL1Distance,
     PremiseCount,
     Ratio,
     RootOperator,
-    SkeletonizeFormula,
     SharedOperators,
     SharedSymbols,
     SharedVariables,
+    SkeletonizeFormula,
     SubtreeJaccard,
     SubtreeSet,
     SymbolHistogram,
@@ -60,12 +61,12 @@ DEFAULT_OPERATORS = (
     Abs,
     Sum,
     Mean,
-    #Exp,
-    #Log,
+    # Exp,
+    # Log,
     Sqrt,
-    #Sin,
-    #Cos,
-    #Tanh,
+    # Sin,
+    # Cos,
+    # Tanh,
     Len,
     LessThan,
     Equal,
@@ -131,6 +132,7 @@ class InferenceControl:
         self.prop_class = RandomPropagationPy(partial=False, cache=False)
         self.saved_graphs: list[Path] = []
         self.last_mem: Any | None = None
+        self.accepted_graphs: list[Graph] = []
 
     @staticmethod
     def _sample_rows_by_goal(
@@ -202,7 +204,68 @@ class InferenceControl:
             if graph_path is not None:
                 self.saved_graphs.append(graph_path)
             self.last_mem = mem
+            self.accepted_graphs.append(graph.clone(copy=True))
             yield graph, coefficient
+
+    def predict(self, goal_array: Any, candidate_array: Any) -> np.ndarray:
+        """Predict probabilities for equally sized Goal and candidate arrays."""
+        goals = self._formula_array(goal_array)
+        candidates = self._formula_array(candidate_array)
+        if goals.shape != candidates.shape:
+            raise ValueError("goal_array and candidate_array must have the same shape")
+        feature_columns = [
+            self._evaluate_graph(graph, goals, candidates)
+            for graph in self.accepted_graphs
+        ]
+        features = (
+            np.column_stack(feature_columns)
+            if feature_columns
+            else np.empty((goals.size, 0))
+        )
+        return self.fitter.predict(features)
+
+    @staticmethod
+    def _formula_array(values: Any) -> np.ndarray:
+        array = np.asarray(values, dtype=object)
+        if array.ndim != 1:
+            raise ValueError("formula arrays must be one-dimensional")
+        return np.asarray(
+            [
+                value if isinstance(value, Formula) else Formula(value)
+                for value in array
+            ],
+            dtype=object,
+        )
+
+    def _evaluate_graph(
+        self, graph: Graph, goals: np.ndarray, candidates: np.ndarray
+    ) -> np.ndarray:
+        cloned = graph.clone(copy=True)
+        mem = NodeValueMap()
+        values = {
+            "goal": FormulaArray(goals),
+            "candidate": FormulaArray(candidates),
+            "one": 1.0,
+        }
+        for leaf in cloned.leaves():
+            if leaf.output.name not in values:
+                raise RuntimeError(f"unknown target leaf {leaf.output.name!r}")
+            mem[leaf] = MapEntry(
+                same=False,
+                val=Value(
+                    values[leaf.output.name], spec=leaf.output.spec, permeable=False
+                ),
+            )
+        roots = list(cloned.roots())
+        if len(roots) != 1:
+            raise RuntimeError("accepted feature graph must have exactly one root")
+        propagated = next(self.prop_class.propagate(roots[0], mem), None)
+        if propagated is None or roots[0] not in propagated:
+            raise RuntimeError("accepted feature graph could not be evaluated")
+        result = propagated[roots[0]].val.value
+        if not isinstance(result, np.ndarray) or result.shape != goals.shape:
+            raise RuntimeError("accepted graph produced an invalid feature array")
+        return np.asarray(result, dtype=float)
 
     def log_loss(self, split: str = "train") -> float:
         """Return the current model's mean log-loss on a data split."""

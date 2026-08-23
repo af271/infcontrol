@@ -269,5 +269,25 @@ class LogitFitter:
         """Return positive-class probabilities for the current strengths."""
         return self._sigmoid(self.strengths)
 
+    def predict(self, features: Any) -> np.ndarray:
+        """Predict positive-class probabilities from accepted feature columns."""
+        values = np.asarray(features, dtype=float)
+        if values.ndim == 1:
+            values = values.reshape(-1, 1)
+        if values.ndim != 2:
+            raise ValueError("features must be a one- or two-dimensional array")
+        if values.shape[0] == self.y.size and values.shape[1] != len(self.coefficients):
+            raise ValueError(
+                f"features must have {len(self.coefficients)} columns, got {values.shape[1]}"
+            )
+        if values.shape[1] != len(self.coefficients):
+            raise ValueError(
+                f"features must have {len(self.coefficients)} columns, got {values.shape[1]}"
+            )
+        if not np.all(np.isfinite(values)):
+            raise ValueError("features must contain only finite values")
+        logits = self.initial_strength + values @ np.asarray(self.coefficients)
+        return self._sigmoid(logits)
+
 
 __all__ = ["LogitFitter"]
