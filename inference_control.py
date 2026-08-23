@@ -92,6 +92,7 @@ class InferenceControl:
         )
         self.prop_class = RandomPropagationPy(partial=False, cache=False)
         self.saved_graphs: list[Path] = []
+        self.last_mem: Any | None = None
 
     @staticmethod
     def _read_rows(csv_path: Path) -> list[dict[str, str]]:
@@ -139,6 +140,7 @@ class InferenceControl:
             graph_path = self._save_graph(graph, mem, len(self.saved_graphs))
             if graph_path is not None:
                 self.saved_graphs.append(graph_path)
+            self.last_mem = mem
             yield graph, coefficient
 
     def log_loss(self, split: str = "train") -> float:

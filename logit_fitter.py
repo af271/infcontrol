@@ -45,12 +45,21 @@ class LogitFitter:
             raise ValueError("max_iter must be positive")
         if tol <= 0:
             raise ValueError("tol must be positive")
-        self.strengths = np.zeros(self.y.shape, dtype=float)
         self.train_indices, self.validation_indices, self.test_indices = (
             self._split_indices(
                 self.y.size, validation_fraction, test_fraction, split_seed
             )
         )
+        self.prior_probability = float(np.mean(self.y[self.train_indices]))
+        prior_probability = np.clip(
+            self.prior_probability,
+            np.finfo(float).eps,
+            1.0 - np.finfo(float).eps,
+        )
+        self.initial_strength = float(
+            np.log(prior_probability) - np.log1p(-prior_probability)
+        )
+        self.strengths = np.full(self.y.shape, self.initial_strength, dtype=float)
         self.coefficients: list[float] = []
         self.features: list[np.ndarray] = []
         self.losses: list[float] = []

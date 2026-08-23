@@ -5,11 +5,14 @@ from infcontrol import LogitFitter
 
 
 def test_logit_fitter_initializes_strengths_and_accepts_feature() -> None:
-    targets = np.array([0, 0, 1, 1])
-    feature = np.array([-2.0, -1.0, 1.0, 2.0])
+    targets = np.array([0, 1] * 10)
+    feature = np.array([-2.0, 2.0] * 10)
     fitter = LogitFitter(targets, validation_fraction=0.5, test_fraction=0)
 
-    np.testing.assert_array_equal(fitter.strengths, np.zeros(4))
+    assert fitter.prior_probability == pytest.approx(
+        np.mean(targets[fitter.train_indices])
+    )
+    np.testing.assert_allclose(fitter.strengths, fitter.initial_strength)
     coefficient = fitter.evaluate(feature)
 
     assert coefficient is not None
@@ -22,22 +25,29 @@ def test_logit_fitter_initializes_strengths_and_accepts_feature() -> None:
 
 
 def test_logit_fitter_rejects_feature_without_improvement() -> None:
-    fitter = LogitFitter([0, 0, 1, 1], validation_fraction=0.5, test_fraction=0)
-    fitter.evaluate([-2.0, -1.0, 1.0, 2.0])
+    fitter = LogitFitter([0, 1] * 10, validation_fraction=0.5, test_fraction=0)
+    fitter.evaluate([-2.0, 2.0] * 10)
     strengths = fitter.strengths.copy()
     coefficients = fitter.coefficients.copy()
 
-    assert fitter.evaluate([0.0, 0.0, 0.0, 0.0]) is None
+    assert fitter.evaluate(np.zeros(20)) is None
     np.testing.assert_array_equal(fitter.strengths, strengths)
     assert fitter.coefficients == coefficients
     assert len(fitter.features) == 1
 
 
 def test_logit_fitter_acceptance_uses_validation_loss() -> None:
-    fitter = LogitFitter([0, 0, 1, 1], validation_fraction=0.5, test_fraction=0)
+    fitter = LogitFitter([0, 1] * 10, validation_fraction=0.5, test_fraction=0)
     strengths = fitter.strengths.copy()
 
-    coefficient = fitter.evaluate([1.0, 1.0, 1.0, 1.0])
+    feature = np.zeros(20)
+    feature[fitter.train_indices] = np.where(
+        fitter.y[fitter.train_indices] == 1, 1.0, -1.0
+    )
+    feature[fitter.validation_indices] = np.where(
+        fitter.y[fitter.validation_indices] == 1, -1.0, 1.0
+    )
+    coefficient = fitter.evaluate(feature)
 
     assert coefficient is None
     np.testing.assert_array_equal(fitter.strengths, strengths)
