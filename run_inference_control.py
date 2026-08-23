@@ -14,7 +14,7 @@ def run(csv_path: Path, max_popped: int | None, data_fraction: float = 1.0) -> N
     controller = InferenceControl(
         csv_path,
         max_popped=max_popped,
-        split_seed=12,
+        split_seed=13,
         data_fraction=data_fraction,
     )
     controller.print_metrics()

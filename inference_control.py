@@ -22,14 +22,23 @@ from infcontrol.operators import (
     Formula,
     FormulaArray,
     FormulaEqual,
+    AbsDifference,
     ImplicationChainLength,
+    MaxSharedSubtreeSize,
     NumOperators,
     NumVariables,
+    OperatorCosineSimilarity,
+    OperatorL1Distance,
     OperatorHistogram,
+    PremiseCount,
+    Ratio,
     RootOperator,
+    SkeletonizeFormula,
     SharedOperators,
     SharedSymbols,
     SharedVariables,
+    SubtreeJaccard,
+    SubtreeSet,
     SymbolHistogram,
     TreeDepth,
     TreeSize,
@@ -51,15 +60,24 @@ DEFAULT_OPERATORS = (
     Abs,
     Sum,
     Mean,
-    Exp,
-    Log,
+    #Exp,
+    #Log,
     Sqrt,
-    Sin,
-    Cos,
-    Tanh,
+    #Sin,
+    #Cos,
+    #Tanh,
     Len,
     LessThan,
     Equal,
+    OperatorL1Distance,
+    OperatorCosineSimilarity,
+    PremiseCount,
+    AbsDifference,
+    Ratio,
+    SkeletonizeFormula,
+    SubtreeSet,
+    SubtreeJaccard,
+    MaxSharedSubtreeSize,
 )
 
 
@@ -163,7 +181,7 @@ class InferenceControl:
             enum_only=True,
         ):
             roots = list(graph.roots())
-            if not roots or roots[0] not in mem:
+            if not roots or roots[0] not in mem or len(roots) != 1:
                 continue
             feature = mem[roots[0]].val.value
             if (
@@ -267,7 +285,7 @@ class InferenceControl:
             "split",
             "log_loss",
             "geo_mean_p",
-            "accuracy",
+            # "accuracy",
             f"k@recall>={recall_target:.0%}",
         ] + [f"recall@{k}" for k in recall_ks]
         rows = []
@@ -278,7 +296,7 @@ class InferenceControl:
                     split,
                     f"{loss:.6f}",
                     f"{np.exp(-loss):.6f}",
-                    f"{self.accuracy(split):.6f}",
+                    # f"{self.accuracy(split):.6f}",
                     f"{self.k_at_recall(split, recall_target):.2f}",
                     *[f"{self.recall_at_k(split, k):.6f}" for k in recall_ks],
                 ]

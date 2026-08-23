@@ -120,6 +120,31 @@ class FormulaArray(np.ndarray):
         return float(sum(value.desc_len(mode=mode) for value in self))
 
 
+def _subtrees(tree: FrozenNode) -> set[FrozenNode]:
+    if not isinstance(tree, tuple):
+        return set()
+    result = {tree}
+    for child in tree:
+        result.update(_subtrees(child))
+    return result
+
+
+def _skeleton(tree: FrozenNode) -> FrozenNode:
+    if isinstance(tree, tuple):
+        return tuple(_skeleton(child) for child in tree)
+    if isinstance(tree, str) and _is_var_symbol(tree):
+        return "_"
+    return tree
+
+
+def _histogram_vector(left: Formula, right: Formula) -> tuple[np.ndarray, np.ndarray]:
+    keys = sorted(left.operators | right.operators)
+    return (
+        np.asarray([left.operator_histogram.get(key, 0) for key in keys], dtype=float),
+        np.asarray([right.operator_histogram.get(key, 0) for key in keys], dtype=float),
+    )
+
+
 @dataclass(slots=True)
 class _Stats:
     size: int
@@ -581,6 +606,170 @@ class FormulaEqual(BinOp):
         return isinstance(inp, Formula) and isinstance(output, bool)
 
 
+class OperatorL1Distance(BinOp):
+    _raw_specs = [
+        (tuple[Formula, Formula], float),
+        (tuple[Array[Formula], Array[Formula]], Array[float]),
+    ]
+
+    def _call(self, left: Any, right: Any) -> float | np.ndarray:
+        batch = _apply_binary_batch(
+            left,
+            right,
+            lambda a, b: np.abs(
+                _histogram_vector(a, b)[0] - _histogram_vector(a, b)[1]
+            ).sum(),
+            np.float64,
+        )
+        if batch is not None:
+            return batch
+        return float(
+            np.abs(
+                _histogram_vector(left, right)[0] - _histogram_vector(left, right)[1]
+            ).sum()
+        )
+
+
+class OperatorCosineSimilarity(BinOp):
+    _raw_specs = [
+        (tuple[Formula, Formula], float),
+        (tuple[Array[Formula], Array[Formula]], Array[float]),
+    ]
+
+    @staticmethod
+    def _similarity(left: Formula, right: Formula) -> float:
+        left_vector, right_vector = _histogram_vector(left, right)
+        denominator = np.linalg.norm(left_vector) * np.linalg.norm(right_vector)
+        return (
+            float(np.dot(left_vector, right_vector) / denominator)
+            if denominator
+            else 0.0
+        )
+
+    def _call(self, left: Any, right: Any) -> float | np.ndarray:
+        batch = _apply_binary_batch(left, right, self._similarity, np.float64)
+        return self._similarity(left, right) if batch is None else batch
+
+
+class PremiseCount(UnOp):
+    _raw_specs = [
+        (tuple[Formula], float),
+        (tuple[Array[Formula]], Array[float]),
+    ]
+
+    @staticmethod
+    def _count(formula: Formula) -> float:
+        tree = formula.canonical_tree
+        if isinstance(tree, tuple) and tree and tree[0] in IMPLICATION_SYMBOLS:
+            return float(max(0, len(tree) - 2))
+        return 0.0
+
+    def _call(self, formula: Any) -> float | np.ndarray:
+        batch = _apply_unary_batch(formula, self._count, np.float64)
+        return self._count(formula) if batch is None else batch
+
+
+class AbsDifference(BinOp):
+    _raw_specs = [
+        (tuple[int, int], float),
+        (tuple[float, float], float),
+        (tuple[Array[float], Array[float]], Array[float]),
+    ]
+
+    def _call(self, left: Any, right: Any) -> float | np.ndarray:
+        batch = _apply_binary_batch(left, right, lambda a, b: abs(a - b), np.float64)
+        return abs(left - right) if batch is None else batch
+
+
+class Ratio(BinOp):
+    _raw_specs = [
+        (tuple[int, int], float),
+        (tuple[float, float], float),
+        (tuple[Array[float], Array[float]], Array[float]),
+    ]
+
+    @staticmethod
+    def _ratio(left: Any, right: Any) -> Any:
+        if np.isscalar(right):
+            return 0.0 if right == 0 else left / right
+        return np.divide(
+            left, right, out=np.zeros_like(left, dtype=float), where=right != 0
+        )
+
+    def _call(self, left: Any, right: Any) -> float | np.ndarray:
+        batch = _apply_binary_batch(left, right, self._ratio, np.float64)
+        return self._ratio(left, right) if batch is None else batch
+
+
+class SkeletonizeFormula(UnOp):
+    _raw_specs = [
+        (tuple[Formula], Formula),
+        (tuple[Array[Formula]], Array[Formula]),
+    ]
+
+    def _call(self, formula: Any) -> Formula | np.ndarray:
+        if isinstance(formula, np.ndarray):
+            return FormulaArray(
+                [Formula(_skeleton(item.canonical_tree)) for item in formula]
+            )
+        return Formula(_skeleton(formula.canonical_tree))
+
+
+class SubtreeSet(UnOp):
+    _raw_specs = [
+        (tuple[Formula], set[str]),
+        (tuple[Array[Formula]], Array[str]),
+    ]
+
+    def _call(self, formula: Any) -> set[str] | np.ndarray:
+        if isinstance(formula, np.ndarray):
+            return np.asarray(
+                [str(sorted(_subtrees(item.canonical_tree))) for item in formula],
+                dtype=str,
+            )
+        return {str(tree) for tree in _subtrees(formula.canonical_tree)}
+
+
+class SubtreeJaccard(BinOp):
+    _raw_specs = [
+        (tuple[Formula, Formula], float),
+        (tuple[Array[Formula], Array[Formula]], Array[float]),
+    ]
+
+    @staticmethod
+    def _similarity(left: Formula, right: Formula) -> float:
+        left_subtrees = _subtrees(left.canonical_tree)
+        right_subtrees = _subtrees(right.canonical_tree)
+        union = left_subtrees | right_subtrees
+        return float(len(left_subtrees & right_subtrees) / len(union)) if union else 1.0
+
+    def _call(self, left: Any, right: Any) -> float | np.ndarray:
+        batch = _apply_binary_batch(left, right, self._similarity, np.float64)
+        return self._similarity(left, right) if batch is None else batch
+
+
+class MaxSharedSubtreeSize(BinOp):
+    _raw_specs = [
+        (tuple[Formula, Formula], float),
+        (tuple[Array[Formula], Array[Formula]], Array[float]),
+    ]
+
+    @staticmethod
+    def _size(tree: FrozenNode) -> int:
+        if not isinstance(tree, tuple):
+            return 1
+        return 1 + sum(MaxSharedSubtreeSize._size(child) for child in tree)
+
+    @classmethod
+    def _similarity(cls, left: Formula, right: Formula) -> float:
+        shared = _subtrees(left.canonical_tree) & _subtrees(right.canonical_tree)
+        return float(max((cls._size(tree) for tree in shared), default=0))
+
+    def _call(self, left: Any, right: Any) -> float | np.ndarray:
+        batch = _apply_binary_batch(left, right, self._similarity, np.float64)
+        return self._similarity(left, right) if batch is None else batch
+
+
 class SharedVariables(BinOp):
     _raw_specs = [
         (tuple[Formula, Formula], int),
@@ -701,6 +890,15 @@ class SharedSymbols(BinOp):
 __all__ = [
     "Formula",
     "FormulaArray",
+    "OperatorL1Distance",
+    "OperatorCosineSimilarity",
+    "PremiseCount",
+    "AbsDifference",
+    "Ratio",
+    "SkeletonizeFormula",
+    "SubtreeSet",
+    "SubtreeJaccard",
+    "MaxSharedSubtreeSize",
     "UnOp",
     "TreeSize",
     "TreeDepth",

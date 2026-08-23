@@ -1,19 +1,29 @@
 from itertools import islice
 
 import numpy as np
+import pytest
 
 from infcontrol.operators import (
     Formula,
     FormulaEqual,
+    AbsDifference,
     ImplicationChainLength,
+    MaxSharedSubtreeSize,
     NumOperators,
     NumVariables,
+    OperatorCosineSimilarity,
+    OperatorL1Distance,
     OperatorHistogram,
+    PremiseCount,
+    Ratio,
     RootOperator,
+    SkeletonizeFormula,
     SharedOperators,
     SharedSymbols,
     SharedVariables,
     SymbolHistogram,
+    SubtreeJaccard,
+    SubtreeSet,
     TreeDepth,
     TreeSize,
 )
@@ -60,6 +70,29 @@ def test_binary_operators() -> None:
     assert SharedVariables()._call(f1, f2) == 3
     assert SharedOperators()._call(f1, f2) == 2
     assert SharedSymbols()._call(f1, f2) == 5
+
+
+def test_structural_similarity_operators() -> None:
+    f1 = Formula(["->", ["→", "θ", "τ"], ["→", "ψ", "θ"]])
+    f2 = Formula(["->", ["→", "α", "β"], ["→", "γ", "α"]])
+
+    assert OperatorL1Distance()._call(f1, f2) == 0.0
+    assert OperatorCosineSimilarity()._call(f1, f2) == pytest.approx(1.0)
+    assert PremiseCount()._call(f1) == 1.0
+    assert AbsDifference()._call(10, 4) == 6.0
+    assert Ratio()._call(6, 2) == 3.0
+    assert SubtreeJaccard()._call(f1, f2) > 0.0
+    assert MaxSharedSubtreeSize()._call(f1, f2) > 0.0
+
+
+def test_skeleton_and_subtree_operators() -> None:
+    formula = Formula(["->", ["→", "θ", "τ"], "ψ"])
+
+    skeleton = SkeletonizeFormula()._call(formula)
+    assert str(skeleton) == "(-> (→ _ _) _)"
+    subtrees = SubtreeSet()._call(formula)
+    assert isinstance(subtrees, set)
+    assert str(formula.canonical_tree) in subtrees
 
 
 def test_vectorized_unary_operators() -> None:
