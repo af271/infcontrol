@@ -1,79 +1,142 @@
 # infcontrol
 
-Symbolic inference-control utilities and feature operators.
+Symbolic inference-control utilities for Hyperon/MeTTa theorem proving.
 
-## Local development
+Given a proof **goal** and a pool of candidate **premises** (lemmas, facts,
+previously derived formulas), `infcontrol` learns which candidates are likely
+to actually be useful for proving the goal. It does this by:
 
-1. Create and activate a virtual environment.
-2. Install William from the sibling repository in editable mode.
-3. Install this repository in editable mode with dev dependencies.
-4. Run tests.
+1. Symbolically enumerating structural features over (goal, candidate) pairs
+   — tree size/depth, shared operators/variables/symbols, subtree overlap,
+   implication chain length, and more (see `operators.py`) — using William's
+   type-directed program search (`Wunderbaum`).
+2. Greedily fitting a logistic regression on top of the accepted features
+   (`LogitFitter`), keeping only features that measurably improve held-out
+   log-loss.
+3. Persisting the resulting model so it can be used for prediction — from
+   Python or from any other language — without repeating the search.
 
-Example:
+The output is a `predict(goal, candidate) -> probability` function: given a
+goal and a candidate, how likely is it that the candidate will be used in the
+proof? This is meant to guide inference control / premise selection in a
+theorem prover.
+
+## Installation
+
+### 1. William
+
+`infcontrol`'s feature search is built on top of
+[William](https://pypi.org/project/william/), a symbolic program search and
+compression library:
+
+```bash
+pip install william
+```
+
+(For local development against an unreleased William checkout, install it in
+editable mode instead: `pip install -e ../../william`.)
+
+### 2. This repository
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -e ../../william
+pip install william
 pip install -e .[dev]
+```
+
+`.[dev]` pulls in `pytest`/`ruff` for testing and linting. Run the test suite
+with:
+
+```bash
 pytest
 ```
 
-## Training and persisting a model
+## Repository layout
 
-`InferenceControl` searches for accepted feature graphs and fits a logistic
-model on top of them (see `run_inference_control.py`). To reuse a trained
-model for prediction without repeating the (expensive) search, persist it to
-a directory:
+- `dataset.py`, `feature_table.py` — turn a raw MeTTa proof trace
+  (`data/*.metta`, converted to JSON with `metta_to_json.py`) into a
+  `(goal, candidate, used)` CSV training table.
+- `operators.py` — the symbolic feature operators searched over, and the
+  `Formula` wrapper around parsed MeTTa/Hyperon expression trees.
+- `inference_control.py` — `InferenceControl`: runs the feature search and
+  logistic fit end to end, given a training CSV.
+- `logit_fitter.py` — `LogitFitter`: stagewise logistic regression used to
+  accept or reject each candidate feature.
+- `model.py` — persists/loads a trained model (`PredictionModel`) so it can
+  be used for prediction independently of the training data.
+- `predict_cli.py` — command-line/stdio interface for predicting with a
+  saved model from any language.
+- `run_inference_control.py` — CLI entry point that trains a model on the
+  feature table and optionally saves it.
 
-```python
-controller = InferenceControl(csv_path, max_popped=1000)
-list(controller.run())
-controller.save("infcontrol/models/my_model")
-```
-
-This writes one `.dot` file per accepted feature graph plus a `model.json`
-with the fitted logit coefficients into `infcontrol/models/my_model/`. The
-same thing happens automatically when running the training script with
-`--model-dir`:
+## Training a model
 
 ```bash
-python run_inference_control.py --model-dir infcontrol/models/default
+python run_inference_control.py --data-fraction 0.1 --max-popped 100000 --model-dir models/model01
 ```
 
+- `--data-fraction` trains on a random subset of goals, for a quicker run.
+- `--max-popped` bounds how many candidate feature graphs are searched.
+- `--model-dir` saves the trained model (accepted feature graphs + fitted
+  logit coefficients) to that directory once training finishes.
+
 A saved model directory is self-contained: it does not need the training CSV
-or a live `InferenceControl` instance to make predictions. Load it with
-`PredictionModel`:
+or a live `InferenceControl` instance to make predictions afterwards.
+
+## Predicting with a trained model
+
+### From Python
 
 ```python
 from infcontrol import PredictionModel
 
-model = PredictionModel.load("infcontrol/models/default")
+model = PredictionModel.load("models/model01")
 probabilities = model.predict(goal_formulas, candidate_formulas)
 ```
 
-## Predicting from other languages
+### From the command line / other languages
 
-`infcontrol-predict` (installed as a console script, or runnable as
-`python -m infcontrol.predict_cli`) loads a saved model once and serves
-predictions over stdio, so any language that can spawn a subprocess and
-exchange newline-delimited JSON can use it without a Python runtime
-dependency of its own:
+`predict_cli.py` loads a saved model once and serves predictions, so any
+language that can spawn a subprocess and exchange JSON can use it without a
+Python runtime dependency of its own.
+
+One-shot prediction:
 
 ```bash
-# one-shot: prints a single JSON result and exits
-infcontrol-predict --model-dir infcontrol/models/default \
-  --goal '["->", "g0", "b"]' --candidate '["->", "g0", "b"]'
-
-# long-running service: one JSON request per input line, one JSON response
-# per output line (flushed immediately), avoids reloading the model
-infcontrol-predict --model-dir infcontrol/models/default
+python -m infcontrol.predict_cli --model-dir models/model01 \
+  --goal '["->", ["→", "v0", "v1"], ["→", "v2", "v0"], "v2", "v1"]' \
+  --candidate '["->", ["→", "v0", ["→", "v1", "v2"]], "v1", "v0", "v2"]'
 ```
 
-Request lines look like `{"goal": [...], "candidate": [...]}` (single pair)
-or `{"goals": [...], "candidates": [...]}` (batched), matching the same
-MeTTa-style JSON tree format used elsewhere in this repository (see
-`metta_to_json.py`). Responses are `{"probability": ...}`,
-`{"probabilities": [...]}`, or `{"error": "..."}`. Any language with a
-subprocess API (e.g. Rust's `std::process::Command`) can drive this protocol
-directly over the child process's stdin/stdout pipes.
+```json
+{"probability": 9.668303753894887e-47}
+```
+
+Goal and candidate are MeTTa-style JSON expression trees, the same format
+produced by `metta_to_json.py`.
+
+Long-running service (loads the model once, then answers one JSON request per
+input line with one JSON response per output line, flushed immediately):
+
+```bash
+python -m infcontrol.predict_cli --model-dir models/model01
+```
+
+```bash
+echo '{"goal": ["->", "g0", "b"], "candidate": ["->", "g0", "b"]}' \
+  | python -m infcontrol.predict_cli --model-dir models/model01
+# {"probability": 0.87}
+
+echo '{"goals": [["->", "g0", "b"], ["->", "g1", "b"]], "candidates": [["->", "g0", "b"], ["->", "c1", "d"]]}' \
+  | python -m infcontrol.predict_cli --model-dir models/model01
+# {"probabilities": [0.87, 0.02]}
+```
+
+Errors are reported as `{"error": "..."}` without killing the process, so a
+long-running caller can keep sending requests. This makes the CLI drivable
+from e.g. Rust's `std::process::Command` or any other subprocess API.
+
+If installed with `pip install -e .` (which registers the
+`infcontrol-predict` console script), the `python -m infcontrol.predict_cli`
+prefix above can be shortened to `infcontrol-predict`.
