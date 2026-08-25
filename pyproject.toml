@@ -22,6 +22,9 @@ william = [
   "william",
 ]
 
+[project.scripts]
+infcontrol-predict = "infcontrol.predict_cli:main"
+
 [tool.setuptools]
 packages = ["infcontrol"]
 
@@ -29,7 +32,7 @@ packages = ["infcontrol"]
 infcontrol = "."
 
 [tool.setuptools.package-data]
-infcontrol = ["data/*.json", "data/*.metta"]
+infcontrol = ["data/*.json", "data/*.metta", "models/**/*.dot", "models/**/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

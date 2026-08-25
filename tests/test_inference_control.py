@@ -32,8 +32,7 @@ def test_inference_control_runs_wunderbaum_features(tmp_path):
                 }
             )
 
-    output_dir = tmp_path / "graphs"
-    controller = InferenceControl(csv_path, output_dir=output_dir, max_popped=1000)
+    controller = InferenceControl(csv_path, max_popped=1000)
     assert controller.targets[-1].name == "one"
     assert controller.targets[-1].value == 1
     split_groups = [
@@ -53,8 +52,6 @@ def test_inference_control_runs_wunderbaum_features(tmp_path):
     assert accepted
     assert len(controller.fitter.coefficients) == len(accepted)
     assert controller.fitter.log_loss() < np.log(2.0)
-    assert len(controller.saved_graphs) == len(accepted)
-    assert all(path.exists() for path in controller.saved_graphs)
 
 
 def test_inference_control_predicts_equal_length_formula_arrays(tmp_path):

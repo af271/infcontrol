@@ -13,13 +13,14 @@ from william.library.base import Value
 from william.library.basic_ops import Equal, Len, LessThan
 from william.library.complex_ops import Abs, Mean, Sqrt, Sum
 from william.library.types import Array
-from william.nvmap import MapEntry, NodeValueMap
 from william.propagation_py import RandomPropagation as RandomPropagationPy
 from william.structures import Graph
 from william.wunderbaum import Wunderbaum
 
 from infcontrol.logit_fitter import LogitFitter
+from infcontrol.model import evaluate_graph, formula_array, save_model
 from infcontrol.operators import (
+    Formula,
     AbsDifference,
     Formula,
     FormulaArray,
@@ -89,7 +90,6 @@ class InferenceControl:
         self,
         csv_path: str | Path,
         operators: Iterable[type] = DEFAULT_OPERATORS,
-        output_dir: str | Path | None = None,
         max_popped: int | None = 1000,
         level: int = 0,
         fitter_kwargs: dict[str, Any] | None = None,
@@ -99,7 +99,6 @@ class InferenceControl:
         data_fraction: float = 1.0,
     ) -> None:
         self.csv_path = Path(csv_path)
-        self.output_dir = Path(output_dir) if output_dir is not None else None
         self.max_popped = max_popped
         if not 0 < data_fraction <= 1:
             raise ValueError("data_fraction must be greater than 0 and at most 1")
@@ -130,7 +129,6 @@ class InferenceControl:
             [(operator(dl=8), 0) for operator in operators], level=level
         )
         self.prop_class = RandomPropagationPy(partial=False, cache=False)
-        self.saved_graphs: list[Path] = []
         self.last_mem: Any | None = None
         self.accepted_graphs: list[Graph] = []
 
@@ -200,21 +198,18 @@ class InferenceControl:
             if coefficient is None:
                 continue
 
-            graph_path = self._save_graph(graph, mem, len(self.saved_graphs))
-            if graph_path is not None:
-                self.saved_graphs.append(graph_path)
             self.last_mem = mem
             self.accepted_graphs.append(graph.clone(copy=True))
             yield graph, coefficient
 
     def predict(self, goal_array: Any, candidate_array: Any) -> np.ndarray:
         """Predict probabilities for equally sized Goal and candidate arrays."""
-        goals = self._formula_array(goal_array)
-        candidates = self._formula_array(candidate_array)
+        goals = formula_array(goal_array)
+        candidates = formula_array(candidate_array)
         if goals.shape != candidates.shape:
             raise ValueError("goal_array and candidate_array must have the same shape")
         feature_columns = [
-            self._evaluate_graph(graph, goals, candidates)
+            evaluate_graph(graph, self.prop_class, goals, candidates)
             for graph in self.accepted_graphs
         ]
         features = (
@@ -224,52 +219,19 @@ class InferenceControl:
         )
         return self.fitter.predict(features)
 
-    @staticmethod
-    def _formula_array(values: Any) -> np.ndarray:
-        array = np.asarray(values, dtype=object)
-        if array.ndim != 1:
-            raise ValueError("formula arrays must be one-dimensional")
-        return np.asarray(
-            [
-                value if isinstance(value, Formula) else Formula(value)
-                for value in array
-            ],
-            dtype=object,
+    def save(self, directory: str | Path) -> Path:
+        """Persist the accepted feature graphs and fitted coefficients.
+
+        The resulting directory can be loaded standalone with
+        :meth:`infcontrol.model.PredictionModel.load`, without the training
+        CSV or this ``InferenceControl`` instance.
+        """
+        return save_model(
+            directory,
+            self.accepted_graphs,
+            self.fitter.initial_strength,
+            self.fitter.coefficients,
         )
-
-    def _evaluate_graph(
-        self, graph: Graph, goals: np.ndarray, candidates: np.ndarray
-    ) -> np.ndarray:
-        cloned = graph.clone(copy=True)
-        mem = NodeValueMap()
-        values = {
-            "goal": FormulaArray(goals),
-            "candidate": FormulaArray(candidates),
-            "one": 1.0,
-        }
-        for leaf in cloned.leaves():
-            if leaf.output.name not in values:
-                raise RuntimeError(f"unknown target leaf {leaf.output.name!r}")
-            mem[leaf] = MapEntry(
-                same=False,
-                val=Value(
-                    values[leaf.output.name], spec=leaf.output.spec, permeable=False
-                ),
-            )
-        roots = list(cloned.roots())
-        if len(roots) != 1:
-            raise RuntimeError("accepted feature graph must have exactly one root")
-        propagated = next(self.prop_class.propagate(roots[0], mem), None)
-        if propagated is None or roots[0] not in propagated:
-            raise RuntimeError("accepted feature graph could not be evaluated")
-        result = propagated[roots[0]].val.value
-        if not isinstance(result, np.ndarray) or result.shape != goals.shape:
-            raise RuntimeError("accepted graph produced an invalid feature array")
-        return np.asarray(result, dtype=float)
-
-    def log_loss(self, split: str = "train") -> float:
-        """Return the current model's mean log-loss on a data split."""
-        return self.fitter.log_loss(split)
 
     def accuracy(self, split: str) -> float:
         indices = {
@@ -353,7 +315,7 @@ class InferenceControl:
         ] + [f"recall@{k}" for k in recall_ks]
         rows = []
         for split in ("train", "validation", "test"):
-            loss = self.log_loss(split)
+            loss = self.fitter.log_loss(split)
             rows.append(
                 [
                     split,
@@ -376,14 +338,6 @@ class InferenceControl:
             print(
                 " | ".join(str(value).ljust(width) for value, width in zip(row, widths))
             )
-
-    def _save_graph(self, graph: Graph, mem: Any, index: int) -> Path | None:
-        if self.output_dir is None:
-            return None
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-        path = self.output_dir / f"feature_{index}"
-        graph.render(filename=path, mem=mem, create_file="dot", view=False)
-        return path.with_suffix(".dot")
 
 
 __all__ = ["DEFAULT_OPERATORS", "InferenceControl"]

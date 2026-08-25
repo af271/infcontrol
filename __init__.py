@@ -11,6 +11,7 @@ from infcontrol.canonicalize import (
 from infcontrol.dataset import DATASET_FILE, Dataset, DatasetRecord
 from infcontrol.logit_fitter import LogitFitter
 from infcontrol.inference_control import InferenceControl
+from infcontrol.model import PredictionModel, save_model
 from infcontrol.operators import (
     Formula,
     FormulaArray,
@@ -43,6 +44,8 @@ __all__ = [
     "DatasetRecord",
     "LogitFitter",
     "InferenceControl",
+    "PredictionModel",
+    "save_model",
     "canonicalize",
     "is_variable",
     "tree_size",
