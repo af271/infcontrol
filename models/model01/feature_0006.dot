@@ -1,0 +1,17 @@
+128342832739936* [label="{"value": "None", "name": "goal", "spec": "Array[F]", "permeable": false}", shape=box, color="#6699ff", height=0.02, width=0.01; fontsize=10; fontcolor="#6699ff"];
+maxsharedsubtreesize128342832741696 [label="maxsharedsubtreesize", shape=oval, color="#e8e8e8", height=0.02, width=0.01; fontsize=10; fontcolor="#e8e8e8"];
+128342832740896 [label="{"value": "None", "spec": "Array[float]", "permeable": true}", shape=box, color="#e8e8e8", height=0.02, width=0.01; fontsize=10; fontcolor="#e8e8e8"];
+sqrt128342832738336 [label="sqrt", shape=oval, color="#e8e8e8", height=0.02, width=0.01; fontsize=10; fontcolor="#e8e8e8"];
+128342832731056 [label="{"value": "None", "spec": "Array[float]", "permeable": true}", shape=box, color="#e8e8e8", height=0.02, width=0.01; fontsize=10; fontcolor="#e8e8e8"];
+lessthan128342832739216 [label="lessthan", shape=oval, color="#e8e8e8", height=0.02, width=0.01; fontsize=10; fontcolor="#e8e8e8"];
+128342832741536 [label="{"value": "None", "spec": "Array[bool]", "permeable": true}", shape=box, color="#e8e8e8", height=0.02, width=0.01; fontsize=10; fontcolor="#e8e8e8"];
+128342832742176* [label="{"value": "None", "name": "one", "spec": "float", "permeable": true}", shape=box, color="#6699ff", height=0.02, width=0.01; fontsize=10; fontcolor="#6699ff"];
+128342832726976* [label="{"value": "None", "name": "candidate", "spec": "Array[F]", "permeable": false}", shape=box, color="#6699ff", height=0.02, width=0.01; fontsize=10; fontcolor="#6699ff"];
+"maxsharedsubtreesize128342832741696" -> "128342832726976" [arrowsize=0.5, arrowhead=none,color="#bbbbbb"];
+"maxsharedsubtreesize128342832741696" -> "128342832739936" [arrowsize=0.5, arrowhead=none,color="#bbbbbb"];
+"128342832740896" -> "maxsharedsubtreesize128342832741696" [arrowsize=0.5, arrowhead=none, color="#bbbbbb"];
+"sqrt128342832738336" -> "128342832740896" [arrowsize=0.5, arrowhead=none,color="#bbbbbb"];
+"128342832731056" -> "sqrt128342832738336" [arrowsize=0.5, arrowhead=none, color="#bbbbbb"];
+"lessthan128342832739216" -> "128342832731056" [arrowsize=0.5, arrowhead=none,color="#bbbbbb"];
+"lessthan128342832739216" -> "128342832742176" [arrowsize=0.5, arrowhead=none,color="#bbbbbb"];
+"128342832741536" -> "lessthan128342832739216" [arrowsize=0.5, arrowhead=none, color="#bbbbbb"];

@@ -1,0 +1,89 @@
+{
+  "initial_strength": -5.120817500033296,
+  "features": [
+    {
+      "graph": "feature_0000.dot",
+      "coefficient": -100.00942231130142
+    },
+    {
+      "graph": "feature_0001.dot",
+      "coefficient": -1.0972024971188976
+    },
+    {
+      "graph": "feature_0002.dot",
+      "coefficient": 0.817379124870164
+    },
+    {
+      "graph": "feature_0003.dot",
+      "coefficient": -1.3126622270128772
+    },
+    {
+      "graph": "feature_0004.dot",
+      "coefficient": -2.1789287765926524
+    },
+    {
+      "graph": "feature_0005.dot",
+      "coefficient": 0.12422063934687991
+    },
+    {
+      "graph": "feature_0006.dot",
+      "coefficient": 0.12422081777777666
+    },
+    {
+      "graph": "feature_0007.dot",
+      "coefficient": -1.4040741399950813
+    },
+    {
+      "graph": "feature_0008.dot",
+      "coefficient": -0.47972187403877165
+    },
+    {
+      "graph": "feature_0009.dot",
+      "coefficient": 0.38568288967316267
+    },
+    {
+      "graph": "feature_0010.dot",
+      "coefficient": 0.882316145771316
+    },
+    {
+      "graph": "feature_0011.dot",
+      "coefficient": -0.003073503109700702
+    },
+    {
+      "graph": "feature_0012.dot",
+      "coefficient": 4.758278101237579
+    },
+    {
+      "graph": "feature_0013.dot",
+      "coefficient": 1.5953586276481944
+    },
+    {
+      "graph": "feature_0014.dot",
+      "coefficient": 0.10555713396285674
+    },
+    {
+      "graph": "feature_0015.dot",
+      "coefficient": 0.5537096710517606
+    },
+    {
+      "graph": "feature_0016.dot",
+      "coefficient": 1.9186273811089378
+    },
+    {
+      "graph": "feature_0017.dot",
+      "coefficient": -3.148654587404932
+    },
+    {
+      "graph": "feature_0018.dot",
+      "coefficient": 1.2965889528682535
+    },
+    {
+      "graph": "feature_0019.dot",
+      "coefficient": -100.01075905736741
+    },
+    {
+      "graph": "feature_0020.dot",
+      "coefficient": -9.607583148174136e-05
+    }
+  ]
+}
