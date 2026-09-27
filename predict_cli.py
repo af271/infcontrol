@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Serve a saved inference-control model for prediction from any language.
 
 Loads a model directory written by :func:`infcontrol.model.save_model` once,
@@ -34,6 +33,7 @@ import sys
 from pathlib import Path
 from typing import IO
 
+from infcontrol.context_features import OnlineContextTracker
 from infcontrol.model import PredictionModel
 
 DEFAULT_MODEL_DIR = Path(__file__).resolve().parent / "models" / "default"
@@ -45,15 +45,32 @@ def _predict_one(model: PredictionModel, goal: object, candidate: object) -> flo
 
 def serve(model: PredictionModel, input_stream: IO[str], output_stream: IO[str]) -> None:
     """Answer one JSON request per input line until the stream closes."""
+    context_tracker = OnlineContextTracker()
     for line in input_stream:
         line = line.strip()
         if not line:
             continue
         try:
             request = json.loads(line)
+            if request.get("command") == "observe":
+                context_tracker.observe(
+                    request["theory_labels"], request["used_labels"]
+                )
+                response: dict[str, object] = {"ok": True}
+                output_stream.write(json.dumps(response) + "\n")
+                output_stream.flush()
+                continue
             if "goals" in request or "candidates" in request:
-                probabilities = model.predict(request["goals"], request["candidates"])
-                response: dict[str, object] = {"probabilities": probabilities.tolist()}
+                context_features = request.get("context_features")
+                if context_features is None and model.context_feature_names:
+                    generated = context_tracker.features(request["candidate_labels"])
+                    context_features = {
+                        name: generated[name] for name in model.context_feature_names
+                    }
+                probabilities = model.predict(
+                    request["goals"], request["candidates"], context_features
+                )
+                response = {"probabilities": probabilities.tolist()}
             else:
                 probability = _predict_one(model, request["goal"], request["candidate"])
                 response = {"probability": probability}

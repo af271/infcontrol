@@ -1,0 +1,13 @@
+139353340405680* [label="{"value": "None", "name": "goal", "spec": "Array[F]", "permeable": false}", shape=box, color="#6699ff", height=0.02, width=0.01; fontsize=10; fontcolor="#6699ff"];
+maxsharedsubtreesize139353340399280 [label="maxsharedsubtreesize", shape=oval, color="#e8e8e8", height=0.02, width=0.01; fontsize=10; fontcolor="#e8e8e8"];
+139353340400720 [label="{"value": "None", "spec": "Array[float]", "permeable": true}", shape=box, color="#e8e8e8", height=0.02, width=0.01; fontsize=10; fontcolor="#e8e8e8"];
+lessthan139353340408960 [label="lessthan", shape=oval, color="#e8e8e8", height=0.02, width=0.01; fontsize=10; fontcolor="#e8e8e8"];
+139353340399760 [label="{"value": "None", "spec": "Array[bool]", "permeable": true}", shape=box, color="#e8e8e8", height=0.02, width=0.01; fontsize=10; fontcolor="#e8e8e8"];
+139353340410560* [label="{"value": "None", "name": "one", "spec": "float", "permeable": true}", shape=box, color="#6699ff", height=0.02, width=0.01; fontsize=10; fontcolor="#6699ff"];
+139353340407920* [label="{"value": "None", "name": "candidate", "spec": "Array[F]", "permeable": false}", shape=box, color="#6699ff", height=0.02, width=0.01; fontsize=10; fontcolor="#6699ff"];
+"maxsharedsubtreesize139353340399280" -> "139353340407920" [arrowsize=0.5, arrowhead=none,color="#bbbbbb"];
+"maxsharedsubtreesize139353340399280" -> "139353340405680" [arrowsize=0.5, arrowhead=none,color="#bbbbbb"];
+"139353340400720" -> "maxsharedsubtreesize139353340399280" [arrowsize=0.5, arrowhead=none, color="#bbbbbb"];
+"lessthan139353340408960" -> "139353340400720" [arrowsize=0.5, arrowhead=none,color="#bbbbbb"];
+"lessthan139353340408960" -> "139353340410560" [arrowsize=0.5, arrowhead=none,color="#bbbbbb"];
+"139353340399760" -> "lessthan139353340408960" [arrowsize=0.5, arrowhead=none, color="#bbbbbb"];

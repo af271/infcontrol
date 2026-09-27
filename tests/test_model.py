@@ -32,7 +32,11 @@ def test_save_and_load_model_predicts_like_the_trained_controller(tmp_path):
     csv_path = tmp_path / "features.csv"
     _write_csv(csv_path)
 
-    controller = InferenceControl(csv_path, max_popped=1000)
+    controller = InferenceControl(
+        csv_path,
+        max_popped=1000,
+        fitter_kwargs={"objective": "log_loss", "acceptance_metric": "log_loss"},
+    )
     list(controller.run())
     assert controller.accepted_graphs
 
@@ -54,7 +58,11 @@ def test_load_model_with_no_accepted_features_returns_prior(tmp_path):
     csv_path = tmp_path / "features.csv"
     _write_csv(csv_path)
 
-    controller = InferenceControl(csv_path, max_popped=1)
+    controller = InferenceControl(
+        csv_path,
+        max_popped=1,
+        fitter_kwargs={"objective": "log_loss", "acceptance_metric": "log_loss"},
+    )
     model_dir = controller.save(tmp_path / "models" / "empty_model")
 
     loaded = PredictionModel.load(model_dir)

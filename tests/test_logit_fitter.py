@@ -67,6 +67,25 @@ def test_logit_fitter_refits_all_coefficients_after_acceptance() -> None:
     refit.assert_called_once()
 
 
+def test_pairwise_rank_objective_improves_validation_ranking() -> None:
+    labels = np.tile([0, 0, 0, 1], 8)
+    groups = np.repeat([f"goal-{index}" for index in range(8)], 4)
+    feature = np.tile([0.0, 0.0, 0.0, 3.0], 8)
+    fitter = LogitFitter(
+        labels,
+        groups=groups,
+        validation_fraction=0.25,
+        test_fraction=0.25,
+        objective="pairwise_rank",
+        acceptance_metric="k_at_recall",
+    )
+
+    assert fitter.evaluate(feature) is not None
+    assert fitter._k_at_recall_for(
+        fitter.strengths, fitter.validation_indices
+    ) == pytest.approx(1.0)
+
+
 def test_logit_fitter_acceptance_uses_validation_loss() -> None:
     fitter = LogitFitter(
         [0, 1] * 10,

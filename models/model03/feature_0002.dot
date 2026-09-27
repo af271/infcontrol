@@ -1,0 +1,13 @@
+139353340406560* [label="{"value": "None", "name": "goal", "spec": "Array[F]", "permeable": false}", shape=box, color="#6699ff", height=0.02, width=0.01; fontsize=10; fontcolor="#6699ff"];
+operatorl1distance139353340402400 [label="operatorl1distance", shape=oval, color="#e8e8e8", height=0.02, width=0.01; fontsize=10; fontcolor="#e8e8e8"];
+139353340397760 [label="{"value": "None", "spec": "Array[float]", "permeable": true}", shape=box, color="#e8e8e8", height=0.02, width=0.01; fontsize=10; fontcolor="#e8e8e8"];
+lessthan139353340400000 [label="lessthan", shape=oval, color="#e8e8e8", height=0.02, width=0.01; fontsize=10; fontcolor="#e8e8e8"];
+139353340398560 [label="{"value": "None", "spec": "Array[bool]", "permeable": true}", shape=box, color="#e8e8e8", height=0.02, width=0.01; fontsize=10; fontcolor="#e8e8e8"];
+139353340410080* [label="{"value": "None", "name": "one", "spec": "float", "permeable": true}", shape=box, color="#6699ff", height=0.02, width=0.01; fontsize=10; fontcolor="#6699ff"];
+139353340407360* [label="{"value": "None", "name": "candidate", "spec": "Array[F]", "permeable": false}", shape=box, color="#6699ff", height=0.02, width=0.01; fontsize=10; fontcolor="#6699ff"];
+"operatorl1distance139353340402400" -> "139353340407360" [arrowsize=0.5, arrowhead=none,color="#bbbbbb"];
+"operatorl1distance139353340402400" -> "139353340406560" [arrowsize=0.5, arrowhead=none,color="#bbbbbb"];
+"139353340397760" -> "operatorl1distance139353340402400" [arrowsize=0.5, arrowhead=none, color="#bbbbbb"];
+"lessthan139353340400000" -> "139353340397760" [arrowsize=0.5, arrowhead=none,color="#bbbbbb"];
+"lessthan139353340400000" -> "139353340410080" [arrowsize=0.5, arrowhead=none,color="#bbbbbb"];
+"139353340398560" -> "lessthan139353340400000" [arrowsize=0.5, arrowhead=none, color="#bbbbbb"];

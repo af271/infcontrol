@@ -73,13 +73,19 @@ pytest
 ## Training a model
 
 ```bash
-python run_inference_control.py --data-fraction 0.1 --max-popped 100000 --model-dir models/model01
+python run_inference_control.py --max-popped 100000 --model-dir models/model01
 ```
 
-- `--data-fraction` trains on a random subset of goals, for a quicker run.
+- `--data-fraction` trains on a subset of theorem instances for exploratory runs.
+  Use the default full dataset for reported results.
 - `--max-popped` bounds how many candidate feature graphs are searched.
 - `--model-dir` saves the trained model (accepted feature graphs + fitted
   logit coefficients) to that directory once training finishes.
+
+Rows with a `theorem_index` column are split chronologically by theorem
+instance. Reports include `all@k`, the fraction of theorems for which all known
+proof premises occur in the first `k` candidates, and `k@100%`, the mean rank
+of the last required premise.
 
 A saved model directory is self-contained: it does not need the training CSV
 or a live `InferenceControl` instance to make predictions afterwards.
@@ -140,3 +146,17 @@ from e.g. Rust's `std::process::Command` or any other subprocess API.
 If installed with `pip install -e .` (which registers the
 `infcontrol-predict` console script), the `python -m infcontrol.predict_cli`
 prefix above can be shortened to `infcontrol-predict`.
+
+## Comparing proof-search logs
+
+`search_log_benchmark.py` parses ECAN/WILLIAM search logs, separates appended
+runs at `Iteration 2`, and marks runs without a daemon summary as incomplete.
+It reports focused-tier hits, fallback count and time, search-time percentiles,
+and nomination sizes. The full output also contains one record per theorem:
+
+```bash
+infcontrol-search-log pc-xp-union.log --summary-only
+```
+
+Omit `--summary-only` to retain theorem labels, tier outcomes, sizes, and
+timings for paired comparisons between rankers.

@@ -17,10 +17,10 @@ from william.propagation_py import RandomPropagation as RandomPropagationPy
 from william.structures import Graph
 from william.wunderbaum import Wunderbaum
 
+from infcontrol.context_features import CONTEXT_COLUMNS
 from infcontrol.logit_fitter import LogitFitter
 from infcontrol.model import evaluate_graph, formula_array, save_model
 from infcontrol.operators import (
-    Formula,
     AbsDifference,
     Formula,
     FormulaArray,
@@ -97,6 +97,7 @@ class InferenceControl:
         test_fraction: float = 0.2,
         split_seed: int = 42,
         data_fraction: float = 1.0,
+        use_context: bool = True,
     ) -> None:
         self.csv_path = Path(csv_path)
         self.max_popped = max_popped
@@ -107,6 +108,30 @@ class InferenceControl:
             raise ValueError("CSV must contain at least one row with two formulas")
         self.rows = self._sample_rows_by_goal(self.rows, data_fraction, split_seed)
         self.features, self.labels = self._arrays_from_rows(self.rows)
+        self.group_ids = np.asarray(
+            [row.get("theorem_index") or row["goal"] for row in self.rows],
+            dtype=object,
+        )
+        self.context_feature_names = (
+            [
+                name
+                for name in CONTEXT_COLUMNS
+                if name in self.rows[0] and name != "theorem_index"
+            ]
+            if use_context
+            else []
+        )
+        self.context_features = (
+            np.asarray(
+                [
+                    [float(row[name]) for name in self.context_feature_names]
+                    for row in self.rows
+                ],
+                dtype=float,
+            )
+            if self.context_feature_names
+            else np.empty((len(self.rows), 0), dtype=float)
+        )
         self.targets = [
             Value(
                 FormulaArray(self.features[:, column]),
@@ -117,13 +142,26 @@ class InferenceControl:
             for column, name in enumerate(("goal", "candidate"))
         ]
         self.targets.append(Value(1.0, spec=float, permeable=True, name="one"))
+        fitter_options = {
+            "objective": "pairwise_rank",
+            "acceptance_metric": "k_at_recall",
+            "recall_target": 1.0,
+            **(fitter_kwargs or {}),
+        }
         self.fitter = LogitFitter(
             self.labels,
-            groups=self.features[:, 0],
+            groups=self.group_ids,
+            group_order=(
+                np.asarray(
+                    [float(row["theorem_index"]) for row in self.rows], dtype=float
+                )
+                if "theorem_index" in self.rows[0]
+                else None
+            ),
             validation_fraction=validation_fraction,
             test_fraction=test_fraction,
             split_seed=split_seed,
-            **(fitter_kwargs or {}),
+            **fitter_options,
         )
         self.enum = Wunderbaum(
             [(operator(dl=8), 0) for operator in operators], level=level
@@ -131,6 +169,9 @@ class InferenceControl:
         self.prop_class = RandomPropagationPy(partial=False, cache=False)
         self.last_mem: Any | None = None
         self.accepted_graphs: list[Graph] = []
+        self.accepted_context_features: list[np.ndarray] = []
+        self.accepted_context_names: list[str] = []
+        self._context_evaluated = False
 
     @staticmethod
     def _sample_rows_by_goal(
@@ -141,7 +182,8 @@ class InferenceControl:
 
         grouped: dict[str, list[dict[str, str]]] = {}
         for row in rows:
-            grouped.setdefault(row["goal"], []).append(row)
+            group_id = row.get("theorem_index") or row["goal"]
+            grouped.setdefault(group_id, []).append(row)
 
         group_names = list(grouped)
         np.random.default_rng(seed).shuffle(group_names)
@@ -174,6 +216,16 @@ class InferenceControl:
 
     def run(self) -> Iterator[tuple[Graph, float]]:
         """Enumerate, evaluate, and save accepted feature graphs."""
+        if not self._context_evaluated:
+            for column, name in enumerate(self.context_feature_names):
+                values = self.context_features[:, column]
+                if (
+                    np.all(np.isfinite(values))
+                    and self.fitter.evaluate(values) is not None
+                ):
+                    self.accepted_context_features.append(values.copy())
+                    self.accepted_context_names.append(name)
+            self._context_evaluated = True
         for graph, _dl, mem, _bottleneck in self.enum.iterate(
             self.prop_class,
             self.targets,
@@ -202,13 +254,30 @@ class InferenceControl:
             self.accepted_graphs.append(graph.clone(copy=True))
             yield graph, coefficient
 
-    def predict(self, goal_array: Any, candidate_array: Any) -> np.ndarray:
+    def predict(
+        self,
+        goal_array: Any,
+        candidate_array: Any,
+        context_features: dict[str, Any] | None = None,
+    ) -> np.ndarray:
         """Predict probabilities for equally sized Goal and candidate arrays."""
         goals = formula_array(goal_array)
         candidates = formula_array(candidate_array)
         if goals.shape != candidates.shape:
             raise ValueError("goal_array and candidate_array must have the same shape")
-        feature_columns = [
+        context_columns = []
+        if self.accepted_context_names:
+            if context_features is None:
+                raise ValueError("context_features are required for this model")
+            context_columns = [
+                np.asarray(context_features[name], dtype=float)
+                for name in self.accepted_context_names
+            ]
+            if any(column.shape != goals.shape for column in context_columns):
+                raise ValueError(
+                    "context feature arrays must match the formula array shape"
+                )
+        feature_columns = context_columns + [
             evaluate_graph(graph, self.prop_class, goals, candidates)
             for graph in self.accepted_graphs
         ]
@@ -218,6 +287,10 @@ class InferenceControl:
             else np.empty((goals.size, 0))
         )
         return self.fitter.predict(features)
+
+    def log_loss(self, split: str = "train") -> float:
+        """Return the current model's mean log-loss on a data split."""
+        return self.fitter.log_loss(split)
 
     def save(self, directory: str | Path) -> Path:
         """Persist the accepted feature graphs and fitted coefficients.
@@ -231,6 +304,7 @@ class InferenceControl:
             self.accepted_graphs,
             self.fitter.initial_strength,
             self.fitter.coefficients,
+            self.accepted_context_names,
         )
 
     def accuracy(self, split: str) -> float:
@@ -251,12 +325,12 @@ class InferenceControl:
             "test": self.fitter.test_indices,
         }[split]
         probabilities = self.fitter.probabilities[indices]
-        goals = self.features[indices, 0]
+        groups = self.group_ids[indices]
         labels = self.labels[indices]
 
         grouped: dict[str, list[tuple[float, float]]] = {}
-        for goal, probability, label in zip(goals, probabilities, labels):
-            grouped.setdefault(str(goal), []).append((probability, label))
+        for group, probability, label in zip(groups, probabilities, labels):
+            grouped.setdefault(str(group), []).append((probability, label))
 
         recalls = []
         for candidates in grouped.values():
@@ -267,6 +341,33 @@ class InferenceControl:
             used_in_top_k = sum(label == 1.0 for _, label in ranked[:k])
             recalls.append(used_in_top_k / total_used)
         return float(np.mean(recalls)) if recalls else float("nan")
+
+    def all_at_k(self, split: str, k: int) -> float:
+        """Return the fraction of theorem instances with every positive in top k."""
+        if k <= 0:
+            raise ValueError("k must be positive")
+        indices = {
+            "train": self.fitter.train_indices,
+            "validation": self.fitter.validation_indices,
+            "test": self.fitter.test_indices,
+        }[split]
+        probabilities = self.fitter.probabilities[indices]
+        groups = self.group_ids[indices]
+        labels = self.labels[indices]
+
+        grouped: dict[str, list[tuple[float, float]]] = {}
+        for group, probability, label in zip(groups, probabilities, labels):
+            grouped.setdefault(str(group), []).append((probability, label))
+
+        complete = []
+        for candidates in grouped.values():
+            total_used = sum(label == 1.0 for _, label in candidates)
+            if total_used == 0:
+                continue
+            ranked = sorted(candidates, key=lambda item: item[0], reverse=True)
+            used_in_top_k = sum(label == 1.0 for _, label in ranked[:k])
+            complete.append(used_in_top_k == total_used)
+        return float(np.mean(complete)) if complete else float("nan")
 
     def k_at_recall(self, split: str, recall_target: float = 0.8) -> float:
         """Return the mean smallest k needed to reach ``recall_target`` per goal."""
@@ -279,12 +380,12 @@ class InferenceControl:
             "test": self.fitter.test_indices,
         }[split]
         probabilities = self.fitter.probabilities[indices]
-        goals = self.features[indices, 0]
+        groups = self.group_ids[indices]
         labels = self.labels[indices]
 
         grouped: dict[str, list[tuple[float, float]]] = {}
-        for goal, probability, label in zip(goals, probabilities, labels):
-            grouped.setdefault(str(goal), []).append((probability, label))
+        for group, probability, label in zip(groups, probabilities, labels):
+            grouped.setdefault(str(group), []).append((probability, label))
 
         required_ks = []
         for candidates in grouped.values():
@@ -304,7 +405,7 @@ class InferenceControl:
     def print_metrics(
         self,
         recall_ks: tuple[int, ...] = (5, 50, 200),
-        recall_target: float = 0.8,
+        recall_target: float = 1.0,
     ) -> None:
         headers = [
             "split",
@@ -312,7 +413,7 @@ class InferenceControl:
             "geo_mean_p",
             # "accuracy",
             f"k@recall>={recall_target:.0%}",
-        ] + [f"recall@{k}" for k in recall_ks]
+        ] + [f"recall@{k}" for k in recall_ks] + [f"all@{k}" for k in recall_ks]
         rows = []
         for split in ("train", "validation", "test"):
             loss = self.fitter.log_loss(split)
@@ -324,6 +425,7 @@ class InferenceControl:
                     # f"{self.accuracy(split):.6f}",
                     f"{self.k_at_recall(split, recall_target):.2f}",
                     *[f"{self.recall_at_k(split, k):.6f}" for k in recall_ks],
+                    *[f"{self.all_at_k(split, k):.6f}" for k in recall_ks],
                 ]
             )
 

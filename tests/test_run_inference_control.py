@@ -20,6 +20,7 @@ def test_recall_at_k_ranks_candidates_per_goal() -> None:
     )
     controller = SimpleNamespace(
         features=np.column_stack((goals, goals)),
+        group_ids=np.array(["a", "a", "a", "b", "b"]),
         labels=np.array([True, False, True, False, True]),
         fitter=SimpleNamespace(
             train_indices=np.arange(5),
@@ -31,6 +32,8 @@ def test_recall_at_k_ranks_candidates_per_goal() -> None:
 
     assert InferenceControl.recall_at_k(controller, "train", 1) == pytest.approx(0.25)
     assert InferenceControl.recall_at_k(controller, "train", 5) == pytest.approx(1.0)
+    assert InferenceControl.all_at_k(controller, "train", 1) == pytest.approx(0.0)
+    assert InferenceControl.all_at_k(controller, "train", 5) == pytest.approx(1.0)
     assert InferenceControl.k_at_recall(controller, "train", 0.8) == pytest.approx(2.5)
 
 
@@ -48,6 +51,7 @@ def test_print_metrics_contains_recall_table(capsys) -> None:
         labels=np.array([0.0, 1.0]),
         accuracy=lambda split: 0.5,
         recall_at_k=lambda split, k: 0.5,
+        all_at_k=lambda split, k: 0.25,
         k_at_recall=lambda split, recall_target: 2.5,
     )
     controller.features[:, 0] = [Formula(["goal", "a"])] * 2
@@ -55,5 +59,5 @@ def test_print_metrics_contains_recall_table(capsys) -> None:
     InferenceControl.print_metrics(controller)
     output = capsys.readouterr().out
     assert "recall@5" in output
-    assert "recall@50" in output
-    assert "k@recall>=80%" in output
+    assert "all@50" in output
+    assert "k@recall>=100%" in output

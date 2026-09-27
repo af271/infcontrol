@@ -1,0 +1,29 @@
+{
+  "initial_strength": -4.4637506205145625,
+  "context_feature_names": [
+    "candidate_age",
+    "candidate_used_count",
+    "candidate_prior_alpha1",
+    "candidate_prior_logodds_alpha5",
+    "recent_used_count_1",
+    "recent_used_count_2",
+    "recent_used_count_10",
+    "recent_used_count_20"
+  ],
+  "context_coefficients": [
+    -0.014977486132636986,
+    0.11803416794260292,
+    -4.370874570359419,
+    0.4689687185989435,
+    1.6375643224286398,
+    0.9108807165417143,
+    -0.06245478927673106,
+    0.3231216124919768
+  ],
+  "features": [
+    {
+      "graph": "feature_0000.dot",
+      "coefficient": -14.630246530955016
+    }
+  ]
+}

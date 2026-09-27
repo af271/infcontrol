@@ -15,4 +15,6 @@ coverage.xml
 .coverage
 htmlcov/
 data/
+models/model02/
+models/model04/
 
