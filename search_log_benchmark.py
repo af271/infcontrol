@@ -81,7 +81,16 @@ def parse_search_log(text: str) -> list[dict[str, Any]]:
         ]
         hits = [item for item in tiered if item["tier_hit"]]
         fallbacks = [item for item in tiered if not item["tier_hit"]]
-        total_times = [item["total_seconds"] for item in completed]
+        search_times = [
+            (
+                item["focus_seconds"]
+                if "focus_seconds" in item
+                else (item["tier_time"] - item["start"]).total_seconds()
+            )
+            + item.get("fallback_seconds", 0.0)
+            for item in completed
+            if "focus_seconds" in item or "tier_time" in item
+        ]
         focus_times = [
             item.get(
                 "focus_seconds",
@@ -106,7 +115,7 @@ def parse_search_log(text: str) -> list[dict[str, Any]]:
             for item in attempts
             if {"selected_labels", "focus_budget", "full_size"} <= item.keys()
         ]
-        search_seconds_total = float(sum(total_times))
+        search_seconds_total = float(sum(search_times))
         fallback_seconds_total = float(sum(fallback_times))
         theorems = []
         for item in attempts:
@@ -130,7 +139,7 @@ def parse_search_log(text: str) -> list[dict[str, Any]]:
                 "fallbacks": len(fallbacks),
                 "focus_hit_rate": len(hits) / len(tiered) if tiered else float("nan"),
                 "focus_seconds": _seconds(focus_times),
-                "search_seconds": _seconds(total_times),
+                "search_seconds": _seconds(search_times),
                 "search_seconds_total": search_seconds_total,
                 "fallback_seconds_total": fallback_seconds_total,
                 "fallback_seconds_share": (

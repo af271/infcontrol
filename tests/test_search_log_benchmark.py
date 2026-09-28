@@ -76,6 +76,7 @@ def test_parse_search_log_records_shared_budget_timeout() -> None:
     assert run["theorems_finished"] == 1
     assert run["proofs_found"] == 0
     assert run["timeouts"] == 1
+    assert run["search_seconds_total"] == pytest.approx(60.0)
     assert run["focus_seconds"]["mean"] == pytest.approx(0.25)
     assert run["fallback_seconds_total"] == pytest.approx(59.75)
     assert run["theorems"][0]["result"] == "timeout"
