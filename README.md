@@ -90,6 +90,33 @@ of the last required premise.
 A saved model directory is self-contained: it does not need the training CSV
 or a live `InferenceControl` instance to make predictions afterwards.
 
+### Contextual model03
+
+`models/model03` is the contextual premise-ranking model used by the
+ECAN/WILLIAM benchmark. It combines one symbolically discovered formula
+feature with eight strictly chronological experience features: candidate age,
+prior use and exposure counts, smoothed use probabilities, and recent-use
+windows. The checked-in model is ready for inference.
+
+Training data is intentionally not packaged: `data/` is ignored because the
+generated context table is large. Exact retraining therefore requires the
+original `pc-xp-llm-trace-full-theory-to-833.metta` trace. Given that trace,
+run:
+
+```bash
+python compare_models.py \
+  --trace data/pc-xp-llm-trace-full-theory-to-833.metta \
+  --context-csv data/context_feature_table.csv \
+  --data-fraction 0.1 \
+  --max-popped 200
+```
+
+The script generates the context table if necessary, trains the formula-only
+model02 baseline and contextual model03, and reports chronological
+train/validation/test metrics. Increase `--data-fraction` and `--max-popped`
+for a larger feature search. Context rows are computed before observing the
+current theorem's proof, so current labels cannot leak into their own inputs.
+
 ## Predicting with a trained model
 
 ### From Python
@@ -160,3 +187,8 @@ infcontrol-search-log pc-xp-union.log --summary-only
 
 Omit `--summary-only` to retain theorem labels, tier outcomes, sizes, and
 timings for paired comparisons between rankers.
+
+For the complete ECAN/WILLIAM/Union installation, execution protocol,
+reported results, and limitations, see the benchmark README under
+`chaining-pc-xp-benchmark/experimental/metamath-aa/pc-xp-union/README.md` in
+the sibling chaining repository.
