@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from time import time
 from typing import Any
 
 import numpy as np
@@ -41,24 +42,14 @@ class LogitFitter:
             raise ValueError("y must contain only finite 0 and 1 values")
         self.groups = np.asarray(groups, dtype=object)
         if self.groups.shape != self.y.shape:
-            raise ValueError(
-                f"groups must have shape {self.y.shape}, got {self.groups.shape}"
-            )
-        self.group_order = (
-            None if group_order is None else np.asarray(group_order, dtype=float)
-        )
+            raise ValueError(f"groups must have shape {self.y.shape}, got {self.groups.shape}")
+        self.group_order = None if group_order is None else np.asarray(group_order, dtype=float)
         if self.group_order is not None and self.group_order.shape != self.y.shape:
-            raise ValueError(
-                f"group_order must have shape {self.y.shape}, got {self.group_order.shape}"
-            )
+            raise ValueError(f"group_order must have shape {self.y.shape}, got {self.group_order.shape}")
         if validation_fraction <= 0 or test_fraction < 0:
-            raise ValueError(
-                "validation_fraction must be positive and test_fraction non-negative"
-            )
+            raise ValueError("validation_fraction must be positive and test_fraction non-negative")
         if validation_fraction + test_fraction >= 1:
-            raise ValueError(
-                "validation_fraction and test_fraction must sum to less than 1"
-            )
+            raise ValueError("validation_fraction and test_fraction must sum to less than 1")
         if max_iter <= 0:
             raise ValueError("max_iter must be positive")
         if tol <= 0:
@@ -69,14 +60,12 @@ class LogitFitter:
             raise ValueError("acceptance_metric must be 'log_loss' or 'k_at_recall'")
         if not 0 < recall_target <= 1:
             raise ValueError("recall_target must be greater than 0 and at most 1")
-        self.train_indices, self.validation_indices, self.test_indices = (
-            self._split_indices(
-                self.groups,
-                validation_fraction,
-                test_fraction,
-                split_seed,
-                self.group_order,
-            )
+        self.train_indices, self.validation_indices, self.test_indices = self._split_indices(
+            self.groups,
+            validation_fraction,
+            test_fraction,
+            split_seed,
+            self.group_order,
         )
         self.prior_probability = float(np.mean(self.y[self.train_indices]))
         prior_probability = np.clip(
@@ -84,9 +73,7 @@ class LogitFitter:
             np.finfo(float).eps,
             1.0 - np.finfo(float).eps,
         )
-        self.initial_strength = float(
-            np.log(prior_probability) - np.log1p(-prior_probability)
-        )
+        self.initial_strength = float(np.log(prior_probability) - np.log1p(-prior_probability))
         self.strengths = np.full(self.y.shape, self.initial_strength, dtype=float)
         self.coefficients: list[float] = []
         self.features: list[np.ndarray] = []
@@ -108,24 +95,18 @@ class LogitFitter:
         group_names = np.asarray([str(group) for group in groups], dtype=object)
         unique_groups, inverse = np.unique(group_names, return_inverse=True)
         if group_order is None:
-            shuffled_groups = np.random.default_rng(seed).permutation(
-                len(unique_groups)
-            )
+            shuffled_groups = np.random.default_rng(seed).permutation(len(unique_groups))
         else:
             first_order = np.full(len(unique_groups), np.inf)
             for row_index, group_index in enumerate(inverse):
-                first_order[group_index] = min(
-                    first_order[group_index], group_order[row_index]
-                )
+                first_order[group_index] = min(first_order[group_index], group_order[row_index])
             shuffled_groups = np.argsort(first_order)
         test_size = int(len(unique_groups) * test_fraction)
         validation_size = max(1, int(len(unique_groups) * validation_fraction))
         if test_fraction > 0:
             test_size = max(1, test_size)
         if validation_size + test_size >= len(unique_groups):
-            raise ValueError(
-                "dataset is too small for the requested train/validation/test split"
-            )
+            raise ValueError("dataset is too small for the requested train/validation/test split")
         test_start = len(unique_groups) - test_size
         validation_start = test_start - validation_size
         group_slices = (
@@ -165,14 +146,10 @@ class LogitFitter:
                 for negative in negatives:
                     positive_indices.append(positive)
                     negative_indices.append(negative)
-        return np.asarray(positive_indices, dtype=int), np.asarray(
-            negative_indices, dtype=int
-        )
+        return np.asarray(positive_indices, dtype=int), np.asarray(negative_indices, dtype=int)
 
     @staticmethod
-    def _pairwise_loss_for(
-        logits: np.ndarray, positive_indices: np.ndarray, negative_indices: np.ndarray
-    ) -> float:
+    def _pairwise_loss_for(logits: np.ndarray, positive_indices: np.ndarray, negative_indices: np.ndarray) -> float:
         if not len(positive_indices):
             return float("nan")
         margins = logits[positive_indices] - logits[negative_indices]
@@ -182,9 +159,7 @@ class LogitFitter:
         grouped: dict[str, list[tuple[float, bool]]] = {}
         probabilities = self._sigmoid(logits)
         for index in indices:
-            grouped.setdefault(str(self.groups[index]), []).append(
-                (float(probabilities[index]), bool(self.y[index]))
-            )
+            grouped.setdefault(str(self.groups[index]), []).append((float(probabilities[index]), bool(self.y[index])))
         required = []
         for values in grouped.values():
             total = sum(label for _, label in values)
@@ -192,9 +167,7 @@ class LogitFitter:
                 continue
             target_hits = int(np.ceil(self.recall_target * total))
             hits = 0
-            for rank, (_, label) in enumerate(
-                sorted(values, key=lambda item: item[0], reverse=True), start=1
-            ):
+            for rank, (_, label) in enumerate(sorted(values, key=lambda item: item[0], reverse=True), start=1):
                 hits += label
                 if hits >= target_hits:
                     required.append(rank)
@@ -234,11 +207,7 @@ class LogitFitter:
             logits = train_strengths + coefficient * train_feature
             probabilities = self._sigmoid(logits)
             gradient = float(np.dot(train_feature, probabilities - train_labels))
-            hessian = float(
-                np.dot(
-                    train_feature * train_feature, probabilities * (1.0 - probabilities)
-                )
-            )
+            hessian = float(np.dot(train_feature * train_feature, probabilities * (1.0 - probabilities)))
             if hessian <= np.finfo(float).tiny:
                 break
 
@@ -250,9 +219,7 @@ class LogitFitter:
             step_scale = 1.0
             while step_scale > 1e-12:
                 candidate = coefficient - step_scale * step
-                candidate_loss = self._log_loss_for(
-                    train_strengths + candidate * train_feature, train_labels
-                )
+                candidate_loss = self._log_loss_for(train_strengths + candidate * train_feature, train_labels)
                 if candidate_loss <= current_loss:
                     coefficient = candidate
                     break
@@ -265,7 +232,7 @@ class LogitFitter:
 
         return coefficient
 
-    def evaluate(self, feature: Any) -> float | None:
+    def evaluate(self, feature: Any, *, deadline_ts: float | None = None) -> float | None:
         """Fit and, if useful, accept one feature coefficient.
 
         Returns the fitted coefficient for an accepted feature and ``None`` if
@@ -273,28 +240,28 @@ class LogitFitter:
         """
         values = np.asarray(feature, dtype=float)
         if values.shape != self.y.shape:
-            raise ValueError(
-                f"feature must have shape {self.y.shape}, got {values.shape}"
-            )
+            raise ValueError(f"feature must have shape {self.y.shape}, got {values.shape}")
         if not np.all(np.isfinite(values)):
             raise ValueError("feature must contain only finite values")
+        if deadline_ts is not None:
+            if not np.isfinite(deadline_ts):
+                raise ValueError("deadline_ts must be finite.")
+            if time() >= deadline_ts:
+                return None
         baseline_loss = self._objective_for(self.strengths, self.train_indices)
-        validation_baseline = self._acceptance_value(
-            self.strengths, self.validation_indices
-        )
+        validation_baseline = self._acceptance_value(self.strengths, self.validation_indices)
 
         coefficient = self._fit_coefficient(values)
         candidate_strengths = self.strengths + coefficient * values
         candidate_loss = self._objective_for(candidate_strengths, self.train_indices)
-        validation_candidate = self._acceptance_value(
-            candidate_strengths, self.validation_indices
-        )
+        validation_candidate = self._acceptance_value(candidate_strengths, self.validation_indices)
 
         if not np.isfinite(candidate_loss) or candidate_loss >= baseline_loss:
             return None
         if (
             not np.isfinite(validation_candidate)
             or validation_candidate >= validation_baseline
+            or (deadline_ts is not None and time() >= deadline_ts)
         ):
             return None
 
@@ -306,15 +273,14 @@ class LogitFitter:
         self.features.append(values.copy())
         refit_coefficients = self._refit_coefficients()
         refit_strengths = self.initial_strength + sum(
-            coefficient * feature
-            for coefficient, feature in zip(refit_coefficients, self.features)
+            coefficient * feature for coefficient, feature in zip(refit_coefficients, self.features)
         )
-        refit_validation_loss = self._acceptance_value(
-            refit_strengths, self.validation_indices
-        )
+        refit_validation_loss = self._acceptance_value(refit_strengths, self.validation_indices)
+        accepted_loss = self._log_loss_for(refit_strengths[self.train_indices], self.y[self.train_indices])
         if (
             not np.isfinite(refit_validation_loss)
             or refit_validation_loss >= validation_baseline
+            or (deadline_ts is not None and time() >= deadline_ts)
         ):
             self.coefficients = old_coefficients
             self.features = old_features
@@ -323,11 +289,7 @@ class LogitFitter:
 
         self.coefficients = refit_coefficients.tolist()
         self.strengths = refit_strengths
-        self.losses.append(
-            self._log_loss_for(
-                refit_strengths[self.train_indices], self.y[self.train_indices]
-            )
-        )
+        self.losses.append(accepted_loss)
         return self.coefficients[-1]
 
     def _acceptance_value(self, logits: np.ndarray, indices: np.ndarray) -> float:
@@ -339,9 +301,7 @@ class LogitFitter:
 
     def _refit_coefficients(self) -> np.ndarray:
         """Refit all accepted feature coefficients on the training split."""
-        feature_matrix = np.column_stack(
-            [feature[self.train_indices] for feature in self.features]
-        )
+        feature_matrix = np.column_stack([feature[self.train_indices] for feature in self.features])
         train_labels = self.y[self.train_indices]
         train_strengths = np.full(train_labels.shape, self.initial_strength)
 
@@ -366,9 +326,7 @@ class LogitFitter:
     @property
     def validation_log_loss(self) -> float:
         """Return the current mean validation Bernoulli negative log-likelihood."""
-        return self._log_loss_for(
-            self.strengths[self.validation_indices], self.y[self.validation_indices]
-        )
+        return self._log_loss_for(self.strengths[self.validation_indices], self.y[self.validation_indices])
 
     def log_loss(self, split: str = "train") -> float:
         """Return the current mean Bernoulli negative log-likelihood."""
@@ -395,13 +353,9 @@ class LogitFitter:
         if values.ndim != 2:
             raise ValueError("features must be a one- or two-dimensional array")
         if values.shape[0] == self.y.size and values.shape[1] != len(self.coefficients):
-            raise ValueError(
-                f"features must have {len(self.coefficients)} columns, got {values.shape[1]}"
-            )
+            raise ValueError(f"features must have {len(self.coefficients)} columns, got {values.shape[1]}")
         if values.shape[1] != len(self.coefficients):
-            raise ValueError(
-                f"features must have {len(self.coefficients)} columns, got {values.shape[1]}"
-            )
+            raise ValueError(f"features must have {len(self.coefficients)} columns, got {values.shape[1]}")
         if not np.all(np.isfinite(values)):
             raise ValueError("features must contain only finite values")
         logits = self.initial_strength + values @ np.asarray(self.coefficients)

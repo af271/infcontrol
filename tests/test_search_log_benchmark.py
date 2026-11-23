@@ -99,3 +99,34 @@ def test_focused_timeout_is_not_counted_as_fallback() -> None:
 
     assert run["timeouts"] == 1
     assert run["fallbacks"] == 0
+
+
+def test_theorem_wall_time_includes_scoring_and_post_search_updates():
+    text = """\
+[2026-09-01 12:00:00:000] [INFO] Iteration 2: add axiom ax-mp
+[2026-09-01 12:00:01:000] [INFO] Iteration 67: union-guided search proof of t up to size 3
+[2026-09-01 12:00:02:000] [INFO]   [tier] focused=3 full=5 af-hit=true
+[2026-09-01 12:00:02:000] [INFO]   [timing] focus-seconds=0.1 fallback-seconds=0.0 timeout=none
+[2026-09-01 12:00:02:100] [INFO] Found proof: proof
+[2026-09-01 12:00:02:200] [INFO]   [wall] index=67 theorem-seconds=1.2
+[2026-09-01 12:00:03:000] [INFO] [bg] daemon sweeps=2 final-funds=1.0
+"""
+    [run] = parse_search_log(text)
+    assert run["theorems"][0]["theorem_wall_seconds"] == pytest.approx(1.2)
+    assert run["search_seconds_total"] == pytest.approx(0.1)
+    with pytest.raises(ValueError, match="does not match"):
+        parse_search_log(text.replace("[wall] index=67", "[wall] index=68"))
+
+
+def test_explicit_fallback_search_time_is_not_overwritten_by_logging_delay():
+    text = """\
+[2026-09-01 12:00:00:000] [INFO] Iteration 2: add axiom ax-mp
+[2026-09-01 12:00:01:000] [INFO] Iteration 67: union-guided search proof of t up to size 3
+[2026-09-01 12:00:02:000] [INFO]   [tier] focused=3 full=5 af-hit=false
+[2026-09-01 12:00:02:010] [INFO]   [timing] focus-seconds=0.1 fallback-seconds=0.2 timeout=none
+[2026-09-01 12:00:02:100] [INFO] Found proof: proof
+[2026-09-01 12:00:03:000] [INFO] [bg] daemon sweeps=2 final-funds=1.0
+"""
+    [run] = parse_search_log(text)
+    assert run["fallback_seconds_total"] == pytest.approx(0.2)
+    assert run["search_seconds_total"] == pytest.approx(0.3)

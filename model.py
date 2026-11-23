@@ -15,12 +15,12 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+
+from infcontrol.operators import Formula, FormulaArray
 from william.library.base import Value
 from william.nvmap import MapEntry, NodeValueMap
 from william.propagation_py import RandomPropagation as RandomPropagationPy
 from william.structures import Graph, dot_to_graph
-
-from infcontrol.operators import Formula, FormulaArray
 
 MODEL_FILE = "model.json"
 
@@ -58,6 +58,8 @@ def _template_graph(graph: Graph) -> Graph:
     :func:`evaluate_graph` always supplies fresh leaf values via ``mem``.
     """
     template = graph.clone(copy=True)
+    for node in template.nodes:
+        node.unpack()
     for node in template.walk(op_nodes=False, val_nodes=True):
         output = node.output
         node.output = Value(
@@ -140,6 +142,7 @@ def save_model(
         ],
     }
     (directory / MODEL_FILE).write_text(json.dumps(metadata, indent=2))
+    (directory / "template_memory.json").unlink(missing_ok=True)
     return directory
 
 

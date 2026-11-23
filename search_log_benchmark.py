@@ -13,12 +13,9 @@ from typing import Any
 import numpy as np
 
 TIMESTAMP = r"\[(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}:\d{3})\]"
-ITERATION_RE = re.compile(
-    TIMESTAMP + r" \[INFO\] Iteration (?P<index>\d+): (?P<message>.*)"
-)
+ITERATION_RE = re.compile(TIMESTAMP + r" \[INFO\] Iteration (?P<index>\d+): (?P<message>.*)")
 UNION_RE = re.compile(
-    TIMESTAMP
-    + r" \[INFO\]\s+\[union\] ecan=(?P<ecan>\d+) will=(?P<william>\d+) union=(?P<union>\d+)"
+    TIMESTAMP + r" \[INFO\]\s+\[union\] ecan=(?P<ecan>\d+) will=(?P<william>\d+) union=(?P<union>\d+)"
 )
 RANKING_RE = re.compile(
     TIMESTAMP
@@ -28,8 +25,7 @@ RANKING_RE = re.compile(
     + r" selected=(?P<selected>\([^)]*\))"
 )
 TIER_RE = re.compile(
-    TIMESTAMP
-    + r" \[INFO\]\s+\[tier\] focused=(?P<focused>\d+) full=(?P<full>\d+) af-hit=(?P<hit>true|false)"
+    TIMESTAMP + r" \[INFO\]\s+\[tier\] focused=(?P<focused>\d+) full=(?P<full>\d+) af-hit=(?P<hit>true|false)"
 )
 TIMING_RE = re.compile(
     TIMESTAMP
@@ -40,12 +36,11 @@ TIMING_RE = re.compile(
 PROOF_RE = re.compile(TIMESTAMP + r" \[INFO\] Found proof:")
 MISS_RE = re.compile(TIMESTAMP + r" \[INFO\] No proof found")
 COMPLETE_RE = re.compile(TIMESTAMP + r" \[INFO\] \[bg\] daemon sweeps=")
+WALL_RE = re.compile(TIMESTAMP + r" \[INFO\]\s+\[wall\] index=(?P<index>\d+) theorem-seconds=(?P<seconds>[\d.eE+-]+)")
 
 
 def _time(match: re.Match[str]) -> datetime:
-    return datetime.strptime(
-        match["timestamp"], "%Y-%m-%d %H:%M:%S:%f"
-    ).replace(tzinfo=UTC)
+    return datetime.strptime(match["timestamp"], "%Y-%m-%d %H:%M:%S:%f").replace(tzinfo=UTC)
 
 
 def _seconds(values: list[float]) -> dict[str, float]:
@@ -74,19 +69,11 @@ def parse_search_log(text: str) -> list[dict[str, Any]]:
             return
         attempts = run.pop("attempts")
         completed = [item for item in attempts if item.get("result") is not None]
-        tiered = [
-            item
-            for item in completed
-            if "tier_hit" in item and item.get("timeout_tier") != "focused"
-        ]
+        tiered = [item for item in completed if "tier_hit" in item and item.get("timeout_tier") != "focused"]
         hits = [item for item in tiered if item["tier_hit"]]
         fallbacks = [item for item in tiered if not item["tier_hit"]]
         search_times = [
-            (
-                item["focus_seconds"]
-                if "focus_seconds" in item
-                else (item["tier_time"] - item["start"]).total_seconds()
-            )
+            (item["focus_seconds"] if "focus_seconds" in item else (item["tier_time"] - item["start"]).total_seconds())
             + item.get("fallback_seconds", 0.0)
             for item in completed
             if "focus_seconds" in item or "tier_time" in item
@@ -98,18 +85,10 @@ def parse_search_log(text: str) -> list[dict[str, Any]]:
             )
             for item in tiered
         ]
-        fallback_times = [
-            item["fallback_seconds"]
-            for item in fallbacks
-            if "fallback_seconds" in item
-        ]
+        fallback_times = [item["fallback_seconds"] for item in fallbacks if "fallback_seconds" in item]
         union_sizes = [item["union_size"] for item in attempts if "union_size" in item]
         budgets = [item["focus_budget"] for item in attempts if "focus_budget" in item]
-        selected_sizes = [
-            len(item["selected_labels"])
-            for item in attempts
-            if "selected_labels" in item
-        ]
+        selected_sizes = [len(item["selected_labels"]) for item in attempts if "selected_labels" in item]
         filled_budgets = [
             len(item["selected_labels"]) == min(item["focus_budget"], item["full_size"])
             for item in attempts
@@ -119,15 +98,9 @@ def parse_search_log(text: str) -> list[dict[str, Any]]:
         fallback_seconds_total = float(sum(fallback_times))
         theorems = []
         for item in attempts:
-            theorem = {
-                key: value
-                for key, value in item.items()
-                if key not in {"start", "tier_time"}
-            }
+            theorem = {key: value for key, value in item.items() if key not in {"start", "tier_time"}}
             if "tier_time" in item and "focus_seconds" not in item:
-                theorem["focus_seconds"] = (
-                    item["tier_time"] - item["start"]
-                ).total_seconds()
+                theorem["focus_seconds"] = (item["tier_time"] - item["start"]).total_seconds()
             theorems.append(theorem)
         run.update(
             {
@@ -143,25 +116,13 @@ def parse_search_log(text: str) -> list[dict[str, Any]]:
                 "search_seconds_total": search_seconds_total,
                 "fallback_seconds_total": fallback_seconds_total,
                 "fallback_seconds_share": (
-                    fallback_seconds_total / search_seconds_total
-                    if search_seconds_total
-                    else float("nan")
+                    fallback_seconds_total / search_seconds_total if search_seconds_total else float("nan")
                 ),
-                "union_size_mean": (
-                    float(np.mean(union_sizes)) if union_sizes else float("nan")
-                ),
-                "selector_modes": sorted(
-                    {item["selector_mode"] for item in attempts if "selector_mode" in item}
-                ),
-                "focus_budget_mean": (
-                    float(np.mean(budgets)) if budgets else float("nan")
-                ),
-                "selected_size_mean": (
-                    float(np.mean(selected_sizes)) if selected_sizes else float("nan")
-                ),
-                "budget_fill_rate": (
-                    float(np.mean(filled_budgets)) if filled_budgets else float("nan")
-                ),
+                "union_size_mean": (float(np.mean(union_sizes)) if union_sizes else float("nan")),
+                "selector_modes": sorted({item["selector_mode"] for item in attempts if "selector_mode" in item}),
+                "focus_budget_mean": (float(np.mean(budgets)) if budgets else float("nan")),
+                "selected_size_mean": (float(np.mean(selected_sizes)) if selected_sizes else float("nan")),
+                "budget_fill_rate": (float(np.mean(filled_budgets)) if filled_budgets else float("nan")),
                 "theorems": theorems,
             }
         )
@@ -188,14 +149,21 @@ def parse_search_log(text: str) -> list[dict[str, Any]]:
                     "attempts": [],
                 }
             if run is not None and "search proof of " in iteration["message"]:
-                label = iteration["message"].split("search proof of ", 1)[1].split(
-                    " up to size", 1
-                )[0]
+                label = iteration["message"].split("search proof of ", 1)[1].split(" up to size", 1)[0]
                 attempt = {"index": int(iteration["index"]), "label": label, "start": timestamp}
                 run["attempts"].append(attempt)
             continue
 
         if run is None:
+            continue
+        wall = WALL_RE.match(line)
+        if wall and attempt is not None:
+            if int(wall["index"]) != attempt["index"]:
+                raise ValueError("wall-time record does not match current theorem")
+            seconds = float(wall["seconds"])
+            if not np.isfinite(seconds) or seconds < 0:
+                raise ValueError("theorem wall time must be finite and non-negative")
+            attempt["theorem_wall_seconds"] = seconds
             continue
         union = UNION_RE.match(line)
         if union and attempt is not None:
@@ -207,10 +175,7 @@ def parse_search_log(text: str) -> list[dict[str, Any]]:
             continue
         ranking = RANKING_RE.match(line)
         if ranking and attempt is not None:
-            if (
-                int(ranking["index"]) != attempt["index"]
-                or ranking["theorem"] != attempt["label"]
-            ):
+            if int(ranking["index"]) != attempt["index"] or ranking["theorem"] != attempt["label"]:
                 raise ValueError("ranking record does not match current theorem")
             attempt.update(
                 selector_mode=ranking["mode"],
@@ -247,7 +212,7 @@ def parse_search_log(text: str) -> list[dict[str, Any]]:
             end = _time(result)
             attempt["result"] = "proof" if PROOF_RE.match(line) else "miss"
             attempt["total_seconds"] = (end - attempt["start"]).total_seconds()
-            if not attempt.get("tier_hit", True) and "tier_time" in attempt:
+            if not attempt.get("tier_hit", True) and "tier_time" in attempt and "fallback_seconds" not in attempt:
                 attempt["fallback_seconds"] = (end - attempt["tier_time"]).total_seconds()
             continue
         complete = COMPLETE_RE.match(line)
@@ -262,15 +227,9 @@ def parse_search_log(text: str) -> list[dict[str, Any]]:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("log_path", help="Search log path, or '-' for stdin")
-    parser.add_argument(
-        "--summary-only", action="store_true", help="Omit per-theorem records"
-    )
+    parser.add_argument("--summary-only", action="store_true", help="Omit per-theorem records")
     args = parser.parse_args()
-    text = (
-        sys.stdin.read()
-        if args.log_path == "-"
-        else Path(args.log_path).read_text(encoding="utf-8")
-    )
+    text = sys.stdin.read() if args.log_path == "-" else Path(args.log_path).read_text(encoding="utf-8")
     runs = parse_search_log(text)
     if args.summary_only:
         runs = [{key: value for key, value in run.items() if key != "theorems"} for run in runs]
