@@ -27,6 +27,7 @@ william = [
 [project.scripts]
 infcontrol-predict = "infcontrol.predict_cli:main"
 infcontrol-search-log = "infcontrol.search_log_benchmark:main"
+infcontrol-service = "infcontrol.chaining_service:main"
 
 [tool.setuptools]
 packages = ["infcontrol"]

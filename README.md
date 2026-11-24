@@ -119,6 +119,9 @@ current theorem's proof, so current labels cannot leak into their own inputs.
 
 ## MORK template memory and chronological cascade comparison
 
+For ongoing ingestion from a running chainer, see
+[Continuous local chaining service](#continuous-local-chaining-service) below.
+
 With WILLIAM's `feature/mork-template-memory` implementation installed, training
 can use a live MORK server with weighted JSON exports:
 
@@ -351,6 +354,178 @@ search counts are unavailable, never counted as zero; the metric excludes
 scoring and background work and does not establish lower total CPU cost.
 The companion cascade README documents complete results and reproduction
 with `--baseline-model-dir`, not only favorable theorems.
+
+## Continuous local chaining service
+
+`python -m infcontrol.chaining_service` adds a **loopback-only internal
+service for the existing goal/premise/proof-usage application**. It is not
+a generic PLN trace compressor, a SingularityNET deployment, or a claim that
+online updates always improve proof-search runtime.
+
+Start a compatible weighted-JSON MORK server, then start the service:
+
+```bash
+python -m infcontrol.chaining_service \
+  --state-dir service-state/chaining \
+  --initial-model models/model03 \
+  --mork-url http://127.0.0.1:18761 \
+  --port 8765
+```
+
+The initial model is copied into the service state on first startup only.
+Subsequent startups use the persisted active model and session assignments.
+The installed console entry point is `infcontrol-service`; the module command
+also works from an existing editable installation without reinstalling.
+Run under your usual process supervisor for persistent operation. SIGTERM
+and Ctrl-C stop the server and its training subprocess. One service process
+may own a state directory at a time.
+
+### Chainer connection
+
+The companion `pc-xp-union` bridge opts in with:
+
+```bash
+export INFCONTROL_SERVICE_URL=http://127.0.0.1:8765
+# Optional: unique per proof-search run; reuse only to resume that same run.
+export INFCONTROL_SESSION_ID=my-chaining-run-001
+```
+
+Unset `INFCONTROL_SERVICE_URL` to retain the original local stdio predictor.
+Service mode does not silently fall back to another model on HTTP errors.
+The existing MeTTa harness can still catch predictor failures and use ECAN;
+bridge errors are printed explicitly, and `--require-scoring` detects missing
+successful scoring in benchmark runs. Frozen-model comparison commands reject
+service mode instead of attributing live-service results to a saved model.
+
+Each session pins its model version. Manual promotion affects **new sessions
+only**, never rankings midway through an existing run. Without an explicit
+session ID, the bridge generates a new ID per process. Session context is
+isolated and rebuilt from that session's committed observations after restart.
+Do not run two chainers concurrently with the same session ID.
+
+### API and durable traces
+
+All POST bodies must be JSON objects with `Content-Type: application/json`.
+Requests are limited to 2 MiB, formulas to 64 nested levels, and pools/theories
+to 2000 unique labels. Endpoint errors return a non-2xx status and `error`.
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /health`, `GET /status` | Active model, worker state, counts and latest 20 jobs including failures/gate reports |
+| `POST /sessions` | `{"session_id":"run-001"}` opens or resumes a pinned session |
+| `POST /score` | Persist and score one event (example below); returns probabilities, model and event IDs |
+| `POST /observe` | Commit actual `proof`, `timeout` or `not_found` outcome and used labels |
+| `POST /train` | `{}` requests a new job, including an explicit retry of a failed job |
+| `POST /promote` | `{"job_id":"..."}` manually activates a candidate with a passed, non-stale gate |
+
+Example scoring request:
+
+```json
+{
+  "session_id": "run-001",
+  "event_id": "67",
+  "goal": ["->", "p", "q"],
+  "candidate_labels": ["a", "b"],
+  "candidates": [["->", "p", "q"], "r"],
+  "theory_labels": ["a", "b", "axiom"]
+}
+```
+
+Commit its outcome, for example:
+
+```json
+{
+  "session_id": "run-001",
+  "event_id": "67",
+  "outcome": "proof",
+  "used_labels": ["a", "axiom"]
+}
+```
+
+Used axioms may be outside the scored rule pool but must belong to the
+exposed theory. For timeouts/not-found, `used_labels` must be empty: their
+unknown proof usage is **not** turned into negative training labels.
+Exposures still advance online context as in the original predictor.
+Only one event may be pending per session. A pending event survives restart;
+repeat its score request or supply its observation to resume.
+Identical retries of score/observe are idempotent; conflicting reuse of an
+event ID returns 409. Context is recorded **before** observing proof labels.
+
+### Automatic learning, manual model activation
+
+The default scheduler starts after **20 distinct successfully proved goals**
+with both used and unused scored candidates, then after every **10 new goals**.
+It uses at most the latest **200 distinct goals**. Repeated canonical goals
+across benchmark sessions retain their first eligible proof only, so the same
+goal cannot appear on both sides of one validation split.
+
+Each job has an immutable input snapshot, training/gate CSVs, model, provenance,
+worker log and result under `STATE/jobs/JOB_ID`. The latest 20% (at least two
+goals) are an outer chronological gate; only the earlier prefix enters fitting
+and its internal validation split. Feature search uses the fixed general
+operator set and default DL-weighted MORK reuse. Defaults are 3000 popped
+candidates and a five-second cooperative training budget; a separate
+**60-second subprocess deadline** bounds the whole job, including MORK access,
+export and evaluation. Startup/CSV export are outside the five-second budget,
+but inside the hard deadline. Flags: `--min-events`, `--train-every`, `--window`,
+`--max-popped`, `--max-seconds`, `--job-timeout`. The minimum configurable
+dataset is six distinct goals; larger windows are preferable for meaningful gates.
+
+A candidate is `ready` only if it does not worsen mean full-recall rank or
+log-loss versus the current active model on the outer gate, and strictly
+improves at least one. Otherwise it is `rejected`. **This offline safety gate
+does not guarantee faster real proofs.** Successive jobs can reuse earlier
+gate data in their expanding training history; this is ongoing development
+validation, not repeated untouched confirmation.
+
+Inspect and explicitly promote a ready job:
+
+```bash
+curl --fail http://127.0.0.1:8765/status
+curl --fail -H 'Content-Type: application/json' \
+  -d '{"job_id":"JOB_ID_FROM_STATUS"}' http://127.0.0.1:8765/promote
+```
+
+Wait for any queued/running job to finish before promotion. A candidate tested
+against a no-longer-active model cannot be promoted. Rejected/failed jobs never
+replace the active model or contribute templates. Training failures and hard
+timeouts are recorded and logged; the same data is not retried automatically
+forever. A new job can be requested explicitly. On restart, interrupted jobs
+are marked failed, while queued jobs remain queued.
+
+SQLite stores traces, the active-model pointer, pinned sessions and approved
+template counts. Successful promotion writes discovered programs/subprograms
+to the service's **own MORK namespace** before switching the active model;
+a failed MORK write leaves the active model unchanged. Durable local template
+snapshots rebuild that namespace (including counts) before each training job,
+so a restarted, empty MORK server does not lose learned memory. No global MORK
+clear is used; other namespaces are untouched. This recovery requires weighted
+JSON MORK support. Initial-model features are not automatically imported into
+template memory; the service learns its own approved general programs.
+
+Back up the **whole state directory**, not just the SQLite file while it is
+open (stop the service first or use SQLite's backup API plus model/job files).
+State contains raw formulas and proof usage; protect it like the input traces.
+Do not manually modify active model files. Raw trace/job history is retained;
+the training window bounds learning input, **not disk retention**.
+The API is unauthenticated and deliberately binds only `127.0.0.1`; do not
+expose it through a public proxy. This implementation targets Linux and is
+intended for trusted local Hyperon processes. Health status does not probe MORK:
+pinned-model prediction can continue while MORK is unavailable, but training
+and promotion then fail explicitly.
+
+Focused validation:
+
+```bash
+python -m pytest -q tests/test_chaining_service.py tests/test_context_features.py
+WILLIAM_MORK_TEST_URL=http://127.0.0.1:18761 \
+  python -m pytest -q tests/test_chaining_service.py
+```
+
+The real-MORK test exercises subprocess training, manual promotion, pinned
+sessions, service restart and recovery after remote namespace contents are lost.
+
+## Standalone model export
 
 Saved feature graphs are expanded back to the domain's primitive operators,
 so the predictor requires neither MORK nor dynamic template classes.

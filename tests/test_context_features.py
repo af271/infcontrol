@@ -1,3 +1,4 @@
+import math
 from pathlib import Path
 
 import pytest
@@ -73,3 +74,11 @@ def test_online_tracker_reproduces_early_training_context() -> None:
     assert second["candidate_prior_alpha1"] == pytest.approx(
         [0.1111111111111111, 0.2222222222222222]
     )
+
+
+@pytest.mark.parametrize("used", [[], ["a"]])
+def test_context_logodds_remain_finite_after_extreme_initial_outcome(used):
+    tracker = OnlineContextTracker()
+    tracker.observe(["a"], used)
+    values = tracker.features(["a", "new"])
+    assert all(math.isfinite(value) for column in values.values() for value in column)

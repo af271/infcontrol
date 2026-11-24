@@ -133,6 +133,7 @@ def _online_context(record: TraceRecord, state: dict[str, Any]) -> dict[str, flo
 
     prior = (used_count + global_p) / (exposure_count + 1.0)
     prior_alpha5 = (used_count + 5.0 * global_p) / (exposure_count + 5.0)
+    logodds_prior = min(1.0 - math.ulp(1.0), max(math.ulp(1.0), prior_alpha5))
     return {
         "candidate_age": age,
         "candidate_fresh_1": float(age <= 1),
@@ -142,7 +143,7 @@ def _online_context(record: TraceRecord, state: dict[str, Any]) -> dict[str, flo
         "candidate_exposure_count": exposure_count,
         "candidate_prior_alpha1": prior,
         "candidate_prior_alpha5": prior_alpha5,
-        "candidate_prior_logodds_alpha5": math.log(prior_alpha5 / (1.0 - prior_alpha5)),
+        "candidate_prior_logodds_alpha5": math.log(logodds_prior / (1.0 - logodds_prior)),
         "recent_used_count_1": recent(1),
         "recent_used_count_2": recent(2),
         "recent_used_count_5": recent(5),
