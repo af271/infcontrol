@@ -333,6 +333,25 @@ is established. A repeatable local improvement on `syl10` is documented,
 alongside all other per-theorem results, in the cascade benchmark README.
 Its `compare_cascade.py` command reproduces this three-way measurement.
 
+A subsequent complete 56-task window (assertions 127-182) adds unchanged
+historical model03 as a development baseline and measures worker-local
+Prolog inferences. Reports are retained in
+`mork-results/chainer-harder-model03-confirm-v1` (four repetitions, three-second
+deadline) and `mork-results/chainer-harder-model03-tight-v1` (four repetitions,
+0.5-second deadline). At three seconds, all cascades solve 51/56 tasks;
+ECAN solves 49-50. On the exact 49 tasks solved in every run of every variant,
+MORK uses a median 17.946 million inferences versus Cold's 20.940 million,
+about 14.3% less completed-search work. Full evaluation time is practically
+unchanged (22.369 versus 22.422 seconds), with no process-time improvement.
+At 0.5 seconds, MORK uses about 2.4% fewer inferences on the 46 commonly solved
+tasks, but solves 47-48/56 versus Cold's 48/56. Thus there is a measured
+search-effort benefit on this development corpus, **not** a demonstrated
+MORK-specific increase in solved tasks or robust general speedup. Interrupted
+search counts are unavailable, never counted as zero; the metric excludes
+scoring and background work and does not establish lower total CPU cost.
+The companion cascade README documents complete results and reproduction
+with `--baseline-model-dir`, not only favorable theorems.
+
 Saved feature graphs are expanded back to the domain's primitive operators,
 so the predictor requires neither MORK nor dynamic template classes.
 `template_memory.json` accompanies memory-enabled models and records their

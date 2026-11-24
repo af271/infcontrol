@@ -63,6 +63,7 @@ def test_parse_search_log_records_shared_budget_timeout() -> None:
 [2026-09-01 12:00:01:000] [INFO] Iteration 182: ecan-guided search proof of hard up to size 13
 [2026-09-01 12:00:01:100] [INFO]   [union] ecan=40 will=0 union=40
 [2026-09-01 12:00:01:200] [INFO]   [ranking] index=182 theorem=hard mode=ecan budget=40 ecan=(a b) william=() selected=(a b)
+[2026-09-01 12:01:01:249] [INFO]   [effort] index=182 search-inferences=unavailable
 [2026-09-01 12:01:01:250] [INFO]   [tier] focused=2 full=135 af-hit=false
 [2026-09-01 12:01:01:251] [INFO]   [timing] focus-seconds=0.25 fallback-seconds=59.75 timeout=fallback
 [2026-09-01 12:01:01:252] [INFO] Search timed out after 60s in fallback tier
@@ -81,6 +82,7 @@ def test_parse_search_log_records_shared_budget_timeout() -> None:
     assert run["fallback_seconds_total"] == pytest.approx(59.75)
     assert run["theorems"][0]["result"] == "timeout"
     assert run["theorems"][0]["timeout_tier"] == "fallback"
+    assert run["theorems"][0]["search_inferences"] is None
 
 
 def test_focused_timeout_is_not_counted_as_fallback() -> None:
@@ -105,6 +107,7 @@ def test_theorem_wall_time_includes_scoring_and_post_search_updates():
     text = """\
 [2026-09-01 12:00:00:000] [INFO] Iteration 2: add axiom ax-mp
 [2026-09-01 12:00:01:000] [INFO] Iteration 67: union-guided search proof of t up to size 3
+[2026-09-01 12:00:01:500] [INFO]   [effort] index=67 search-inferences=1234
 [2026-09-01 12:00:02:000] [INFO]   [tier] focused=3 full=5 af-hit=true
 [2026-09-01 12:00:02:000] [INFO]   [timing] focus-seconds=0.1 fallback-seconds=0.0 timeout=none
 [2026-09-01 12:00:02:100] [INFO] Found proof: proof
@@ -113,9 +116,14 @@ def test_theorem_wall_time_includes_scoring_and_post_search_updates():
 """
     [run] = parse_search_log(text)
     assert run["theorems"][0]["theorem_wall_seconds"] == pytest.approx(1.2)
+    assert run["theorems"][0]["search_inferences"] == 1234
     assert run["search_seconds_total"] == pytest.approx(0.1)
     with pytest.raises(ValueError, match="does not match"):
         parse_search_log(text.replace("[wall] index=67", "[wall] index=68"))
+    with pytest.raises(ValueError, match="effort record does not match"):
+        parse_search_log(text.replace("[effort] index=67", "[effort] index=68"))
+    [unavailable] = parse_search_log(text.replace("search-inferences=1234", "search-inferences=unavailable"))
+    assert unavailable["theorems"][0]["search_inferences"] is None
 
 
 def test_explicit_fallback_search_time_is_not_overwritten_by_logging_delay():

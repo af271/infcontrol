@@ -37,6 +37,9 @@ PROOF_RE = re.compile(TIMESTAMP + r" \[INFO\] Found proof:")
 MISS_RE = re.compile(TIMESTAMP + r" \[INFO\] No proof found")
 COMPLETE_RE = re.compile(TIMESTAMP + r" \[INFO\] \[bg\] daemon sweeps=")
 WALL_RE = re.compile(TIMESTAMP + r" \[INFO\]\s+\[wall\] index=(?P<index>\d+) theorem-seconds=(?P<seconds>[\d.eE+-]+)")
+EFFORT_RE = re.compile(
+    TIMESTAMP + r" \[INFO\]\s+\[effort\] index=(?P<index>\d+) search-inferences=(?P<count>\d+|unavailable)"
+)
 
 
 def _time(match: re.Match[str]) -> datetime:
@@ -155,6 +158,12 @@ def parse_search_log(text: str) -> list[dict[str, Any]]:
             continue
 
         if run is None:
+            continue
+        effort = EFFORT_RE.match(line)
+        if effort and attempt is not None:
+            if int(effort["index"]) != attempt["index"]:
+                raise ValueError("effort record does not match current theorem")
+            attempt["search_inferences"] = None if effort["count"] == "unavailable" else int(effort["count"])
             continue
         wall = WALL_RE.match(line)
         if wall and attempt is not None:
